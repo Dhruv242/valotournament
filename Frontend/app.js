@@ -60,6 +60,14 @@
   function openAuthDropdown() {
     elements.authDropdown.classList.remove("hidden");
     elements.authEmail.focus();
+    
+    // Add visual pulse to highlight the dropdown location
+    elements.authToggle.style.animation = "pulse 0.5s ease-in-out 2";
+    setTimeout(() => {
+      elements.authToggle.style.animation = "";
+    }, 1000);
+    
+    showToast("Sign In Form", "Auth form opened in top-right corner ↗️");
   }
 
   function setView(viewName) {
@@ -141,7 +149,10 @@
     }
 
     showToast("Login required", "Sign in with Gmail before using tournament actions.");
-    openAuthDropdown();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(() => {
+      openAuthDropdown();
+    }, 300);
     return false;
   }
 
@@ -727,23 +738,44 @@
   }
 
   function bindEvents() {
-    elements.heroSignin.addEventListener("click", openAuthDropdown);
-    elements.registerSignin.addEventListener("click", openAuthDropdown);
+    // Hero sign-in button - scroll to top and open dropdown
+    elements.heroSignin.addEventListener("click", function(event) {
+      event.stopPropagation(); // Prevent immediate closing
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      setTimeout(() => {
+        openAuthDropdown();
+      }, 300); // Wait for scroll to complete
+    });
+
+    // Register page sign-in button
+    elements.registerSignin.addEventListener("click", function(event) {
+      event.stopPropagation(); // Prevent immediate closing
+      openAuthDropdown();
+    });
+
     elements.navLinks.forEach(function bindNav(link) {
       link.addEventListener("click", function onNavClick(event) {
         event.preventDefault();
         setView(link.getAttribute("data-nav"));
       });
     });
-    elements.authToggle.addEventListener("click", function toggleAuthDropdown() {
+
+    // Top-right auth toggle button
+    elements.authToggle.addEventListener("click", function toggleAuthDropdown(event) {
+      event.stopPropagation(); // Prevent immediate closing
       elements.authDropdown.classList.toggle("hidden");
+      if (!elements.authDropdown.classList.contains("hidden")) {
+        elements.authEmail.focus();
+      }
     });
+
     elements.authForm.addEventListener("submit", login);
     elements.logoutButton.addEventListener("click", logout);
     elements.teamForm.addEventListener("submit", createTeam);
     elements.playerForm.addEventListener("submit", addPlayer);
     elements.paymentForm.addEventListener("submit", startPayment);
     elements.lookupForm.addEventListener("submit", handleLookup);
+    
     elements.refreshDashboard.addEventListener("click", function refresh() {
       if (state.dashboard) {
         loadDashboard(state.dashboard.teamId, state.dashboard.type);
@@ -774,7 +806,8 @@
     });
 
     elements.tierPicks.forEach(function bindTierButton(button) {
-      button.addEventListener("click", function onClick() {
+      button.addEventListener("click", function onClick(event) {
+        event.stopPropagation();
         const tier = button.getAttribute("data-tier");
         state.selectedType = tier;
         elements.tournamentType.value = tier;
@@ -782,20 +815,34 @@
         saveSession();
         if (!state.auth.isAuthenticated) {
           setView("home");
-          openAuthDropdown();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          setTimeout(() => {
+            openAuthDropdown();
+          }, 300);
           return;
         }
         setView("register");
       });
     });
 
+    // Click outside to close - but ignore clicks on hero/register signin buttons
     document.addEventListener("click", function closeAuthDropdown(event) {
-      if (
-        !elements.authDropdown.classList.contains("hidden") &&
-        !event.target.closest(".auth-menu")
-      ) {
-        elements.authDropdown.classList.add("hidden");
+      // Check if dropdown is open
+      if (elements.authDropdown.classList.contains("hidden")) {
+        return;
       }
+
+      // Check if click was inside auth menu or on any signin button
+      if (
+        event.target.closest(".auth-menu") ||
+        event.target.closest("#hero-signin") ||
+        event.target.closest("#register-signin")
+      ) {
+        return;
+      }
+
+      // Close the dropdown
+      elements.authDropdown.classList.add("hidden");
     });
   }
 

@@ -983,6 +983,18 @@ button:focus-visible {
   margin-bottom: 4px;
 }
 
+/* Pulse animation for sign-in button highlight */
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(43, 210, 255, 0.7);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 10px rgba(43, 210, 255, 0);
+  }
+}
+
 @media (max-width: 1040px) {
   .hero-grid,
   .registration-grid,

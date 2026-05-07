@@ -40,6 +40,7 @@
               <a href="#tiers" data-nav="tiers">Tiers</a>
               <a href="#register" data-nav="register">Register</a>
               <a href="#dashboard" data-nav="dashboard">Dashboard</a>
+              <a href="#admin" data-nav="admin">Admin</a>
             </div>
             <div class="auth-menu">
               <button class="button button-secondary small" id="auth-toggle" type="button">Sign In</button>
@@ -324,6 +325,51 @@
                 </div>
               </div>
               <div id="fixture-list" class="fixture-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Admin Section -->
+        <section class="section admin-layout app-view" id="admin" data-view="admin">
+          <div class="section-heading">
+            <p class="eyebrow accent">Admin Control Panel</p>
+            <h3>Tournament Management & Overview</h3>
+          </div>
+
+          <div class="admin-stats panel">
+            <div class="stat-card">
+              <strong id="stat-tournaments">0</strong>
+              <span>Total Tournaments</span>
+            </div>
+            <div class="stat-card">
+              <strong id="stat-teams">0</strong>
+              <span>Total Teams</span>
+            </div>
+            <div class="stat-card">
+              <strong id="stat-players">0</strong>
+              <span>Total Players</span>
+            </div>
+            <div class="stat-card">
+              <strong id="stat-users">0</strong>
+              <span>Registered Users</span>
+            </div>
+          </div>
+
+          <div class="admin-grid">
+            <div class="panel admin-tournaments">
+              <div class="admin-panel-header">
+                <h4>All Tournaments</h4>
+                <button class="button button-secondary small" id="refresh-admin">Refresh</button>
+              </div>
+              <div id="admin-tournaments-list" class="admin-list"></div>
+            </div>
+
+            <div class="panel admin-unassigned">
+              <div class="admin-panel-header">
+                <h4>Unassigned Teams</h4>
+                <p class="muted-text">Teams waiting for tournament assignment</p>
+              </div>
+              <div id="admin-unassigned-list" class="admin-list"></div>
             </div>
           </div>
         </section>
