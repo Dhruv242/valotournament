@@ -30,13 +30,16 @@ function requireAdmin(req, res, next) {
 // Get all tournaments with teams and players
 router.get("/tournaments/overview", requireAdmin, async (req, res) => {
   try {
+    // Get all tournaments
     const tournaments = await pool.query(`
       SELECT * FROM tournaments 
       ORDER BY created_at DESC, id DESC
     `);
 
+    // For each tournament, get teams and players
     const tournamentsWithDetails = await Promise.all(
       tournaments.rows.map(async (tournament) => {
+        // Get teams for this tournament
         const teams = await pool.query(`
           SELECT 
             t.*,
@@ -44,9 +47,10 @@ router.get("/tournaments/overview", requireAdmin, async (req, res) => {
             (SELECT status FROM payments WHERE team_id = t.id ORDER BY id DESC LIMIT 1) as payment_status
           FROM teams t
           WHERE t.tournament_id = $1
-          ORDER BY t.tournament_position ASC
+          ORDER BY t.id ASC
         `, [tournament.id]);
 
+        // Get players for each team
         const teamsWithPlayers = await Promise.all(
           teams.rows.map(async (team) => {
             const players = await pool.query(`
@@ -62,7 +66,7 @@ router.get("/tournaments/overview", requireAdmin, async (req, res) => {
           })
         );
 
-        // FIXED: Using round and position instead of bracket_round and bracket_position
+        // Get matches for this tournament
         const matches = await pool.query(`
           SELECT 
             m.*,
@@ -74,7 +78,7 @@ router.get("/tournaments/overview", requireAdmin, async (req, res) => {
           LEFT JOIN teams t2 ON t2.id = m.team2_id
           LEFT JOIN teams tw ON tw.id = m.winner_id
           WHERE m.tournament_id = $1
-          ORDER BY m.round ASC, m.position ASC, m.id ASC
+          ORDER BY m.round ASC, m.id ASC
         `, [tournament.id]);
 
         return {
@@ -107,6 +111,7 @@ router.get("/teams/unassigned", requireAdmin, async (req, res) => {
       ORDER BY t.created_at DESC
     `);
 
+    // Get players for each team
     const teamsWithPlayers = await Promise.all(
       teams.rows.map(async (team) => {
         const players = await pool.query(`
@@ -205,6 +210,8 @@ router.post("/match/set-winner", requireAdmin, async (req, res) => {
       return res.status(400).json({ error: "match_id and winner_id required" });
     }
 
+    // This uses the existing tournament.js logic
+    // Forward to the tournament route
     const result = await pool.query(
       `UPDATE matches 
        SET match_status='completed', winner_id=$1 

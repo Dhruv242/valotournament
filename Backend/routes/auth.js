@@ -63,15 +63,17 @@ router.post("/login", async (req, res) => {
   try {
     await ensureUsersTable();
 
+    // Check if username exists with different email
     const existingUsername = await pool.query(
       "SELECT id, email FROM users WHERE lower(username) = lower($1) AND email <> $2",
       [username, email]
     );
 
     if (existingUsername.rows.length) {
-      return res.status(409).json({ error: "Username already taken" });
+      return res.status(409).json({ error: "Username already taken by another account" });
     }
 
+    // Check if user exists by email
     const existingUser = await pool.query(
       "SELECT * FROM users WHERE email=$1",
       [email]
@@ -80,37 +82,58 @@ router.post("/login", async (req, res) => {
     let user;
 
     if (existingUser.rows.length) {
+      // USER EXISTS - VALIDATE PASSWORD
       const saved = existingUser.rows[0];
 
+      // If no password set yet, this is their first login - set it now
       if (!saved.password_hash || !saved.password_salt) {
         const salt = crypto.randomBytes(16).toString("hex");
         const passwordHash = hashPassword(password, salt);
+        
         const updated = await pool.query(
           `UPDATE users
-           SET username=$1, role=$2, password_hash=$3, password_salt=$4, updated_at=NOW()
-           WHERE email=$5
-           RETURNING id, email, username, role`,
-          [username, requestedRole, passwordHash, salt, email]
-        );
-        user = updated.rows[0];
-      } else {
-        const passwordHash = hashPassword(password, saved.password_salt);
-        if (passwordHash !== saved.password_hash) {
-          return res.status(401).json({ error: "Invalid Gmail or password" });
-        }
-
-        const updated = await pool.query(
-          `UPDATE users
-           SET username=$1, role=$2, updated_at=NOW()
+           SET password_hash=$1, password_salt=$2, updated_at=NOW()
            WHERE email=$3
            RETURNING id, email, username, role`,
-          [username, requestedRole, email]
+          [passwordHash, salt, email]
         );
         user = updated.rows[0];
+        
+      } else {
+        // PASSWORD ALREADY SET - MUST VALIDATE
+        const passwordHash = hashPassword(password, saved.password_salt);
+        
+        if (passwordHash !== saved.password_hash) {
+          return res.status(401).json({ error: "Invalid password" });
+        }
+
+        // USERNAME CANNOT BE CHANGED AFTER REGISTRATION
+        if (saved.username.toLowerCase() !== username.toLowerCase()) {
+          return res.status(400).json({ 
+            error: `Username locked to "${saved.username}". Cannot change username after registration.`
+          });
+        }
+
+        // ROLE CANNOT BE CHANGED UNLESS ADMIN
+        if (saved.role !== requestedRole && requestedRole === "admin") {
+          return res.status(403).json({ 
+            error: "Cannot upgrade to admin role. Contact system administrator."
+          });
+        }
+
+        user = {
+          id: saved.id,
+          email: saved.email,
+          username: saved.username,
+          role: saved.role
+        };
       }
+      
     } else {
+      // NEW USER - CREATE ACCOUNT
       const salt = crypto.randomBytes(16).toString("hex");
       const passwordHash = hashPassword(password, salt);
+      
       const result = await pool.query(
         `INSERT INTO users (email, username, password_hash, password_salt, role)
          VALUES ($1, $2, $3, $4, $5)
@@ -125,6 +148,7 @@ router.post("/login", async (req, res) => {
     });
 
     res.json({ token, user });
+    
   } catch (err) {
     if (err.code === "23505") {
       return res.status(409).json({ error: "Username or Gmail already registered" });

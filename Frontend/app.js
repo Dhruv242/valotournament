@@ -71,6 +71,24 @@
   }
 
   function setView(viewName) {
+    // Admin access control
+    const adminLink = document.querySelector('[data-nav="admin"]');
+    if (adminLink) {
+      if (state.auth.isAuthenticated && state.auth.role === 'admin') {
+        adminLink.style.display = 'block';
+      } else {
+        adminLink.style.display = 'none';
+      }
+    }
+
+    // Restrict admin view access
+    if (viewName === 'admin') {
+      if (!state.auth.isAuthenticated || state.auth.role !== 'admin') {
+        showToast('Admin access denied', 'Only administrators can access this section.');
+        viewName = 'home';
+      }
+    }
+
     const targetView = document.querySelector('[data-view="' + viewName + '"]');
     const nextView = targetView ? viewName : "home";
     elements.views.forEach(function toggleView(view) {
@@ -78,6 +96,11 @@
     });
     window.location.hash = nextView;
     window.scrollTo({ top: 0, behavior: "smooth" });
+    
+    // Load admin dashboard when switching to admin view
+    if (nextView === 'admin' && state.auth.role === 'admin') {
+      loadAdminDashboard();
+    }
   }
 
   function saveSession() {
@@ -334,7 +357,13 @@
         username + " is now monitoring the tournament console."
       );
       showToast("Signed in", username + " logged in with Gmail.");
-      setView("tiers");
+      
+      // Redirect based on role
+      if (state.auth.role === 'admin') {
+        setView("admin");
+      } else {
+        setView("tiers");
+      }
     } catch (error) {
       showToast("Login failed", error.message);
     }
@@ -787,6 +816,14 @@
       }
     });
 
+    // Admin dashboard refresh button
+    const refreshAdmin = document.getElementById('refresh-admin');
+    if (refreshAdmin) {
+      refreshAdmin.addEventListener("click", function refreshAdminDashboard() {
+        loadAdminDashboard();
+      });
+    }
+
     elements.tournamentType.addEventListener("change", function onTypeChange(event) {
       state.selectedType = event.target.value;
       elements.lookupType.value = state.selectedType;
@@ -852,6 +889,95 @@
     elements.bracketMap.textContent = "Complete payment, then load your team dashboard to reveal the knockout tree.";
     elements.fixtureList.className = "fixture-list empty";
     elements.fixtureList.textContent = "Match mail and opponent data will show here after the bracket fills.";
+  }
+
+  // Admin Dashboard Functions
+  async function loadAdminDashboard() {
+    if (!state.auth.isAuthenticated || state.auth.role !== 'admin') {
+      showToast('Admin access required', 'Only administrators can view this section.');
+      return;
+    }
+
+    try {
+      const [stats, tournaments, unassignedTeams] = await Promise.all([
+        apiRequest("/admin/stats"),
+        apiRequest("/admin/tournaments/overview"),
+        apiRequest("/admin/teams/unassigned"),
+      ]);
+
+      renderAdminDashboard(stats, tournaments, unassignedTeams);
+      pushActivity("Admin dashboard loaded", "Overview refreshed successfully.");
+    } catch (error) {
+      showToast("Admin load failed", error.message);
+    }
+  }
+
+  function renderAdminDashboard(stats, tournaments, unassignedTeams) {
+    // Update stats
+    document.getElementById('stat-tournaments').textContent = stats.total_tournaments || 0;
+    document.getElementById('stat-teams').textContent = stats.total_teams || 0;
+    document.getElementById('stat-players').textContent = stats.total_players || 0;
+    document.getElementById('stat-users').textContent = stats.total_users || 0;
+
+    // Render tournaments list
+    const tournamentsContainer = document.getElementById('admin-tournaments-list');
+    if (!tournaments.length) {
+      tournamentsContainer.innerHTML = '<p class="muted-text">No tournaments yet.</p>';
+    } else {
+      tournamentsContainer.innerHTML = tournaments
+        .map(function(tournament) {
+          const statusClass = tournament.status === 'running' ? 'badge-live' : 
+                            tournament.status === 'completed' ? 'badge-success' : 'badge-muted';
+          
+          return (
+            '<div class="admin-tournament-card">' +
+            '<div class="card-header">' +
+            '<h5>' + escapeHtml(tournament.tournament_type.toUpperCase() + ' Tournament #' + tournament.id) + '</h5>' +
+            '<span class="badge ' + statusClass + '">' + escapeHtml(tournament.status) + '</span>' +
+            '</div>' +
+            '<p class="muted-text">' + tournament.total_teams + ' teams • ' + tournament.total_players + ' players</p>' +
+            '<div class="teams-grid">' +
+            (tournament.teams || []).map(function(team) {
+              return (
+                '<div class="admin-team-card">' +
+                '<h6>' + escapeHtml(team.name) + '</h6>' +
+                '<p class="muted-text">' + (team.players || []).length + ' players</p>' +
+                '<div class="players-list">' +
+                (team.players || []).map(function(player) {
+                  return '<span>' + escapeHtml(player.valorant_name + '#' + player.valorant_tag) + '</span>';
+                }).join('') +
+                '</div>' +
+                '</div>'
+              );
+            }).join('') +
+            '</div>' +
+            '</div>'
+          );
+        })
+        .join('');
+    }
+
+    // Render unassigned teams
+    const unassignedContainer = document.getElementById('admin-unassigned-list');
+    if (!unassignedTeams.length) {
+      unassignedContainer.innerHTML = '<p class="muted-text">All teams are assigned to tournaments.</p>';
+    } else {
+      unassignedContainer.innerHTML = unassignedTeams
+        .map(function(team) {
+          return (
+            '<div class="admin-team-card">' +
+            '<h6>' + escapeHtml(team.name) + '</h6>' +
+            '<p class="muted-text">' + (team.players || []).length + ' players • Awaiting tournament</p>' +
+            '<div class="players-list">' +
+            (team.players || []).map(function(player) {
+              return '<span>' + escapeHtml(player.valorant_name + '#' + player.valorant_tag) + '</span>';
+            }).join('') +
+            '</div>' +
+            '</div>'
+          );
+        })
+        .join('');
+    }
   }
 
   loadSession();

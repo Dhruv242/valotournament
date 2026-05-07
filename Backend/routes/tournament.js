@@ -1,328 +1,198 @@
 const express = require("express");
 const router = express.Router();
-const net = require("net");
+const jwt = require("jsonwebtoken");
 const pool = require("../db");
 
-function smtpCommand(socket, command) {
-  socket.write(command + "\r\n");
-}
+const SECRET = process.env.JWT_SECRET || "supersecret";
 
-function sendMailHogEmail(to, subject, text) {
-  return new Promise((resolve) => {
-    if (!to) {
-      resolve(false);
-      return;
+// Get tournament details by team ID (PLAYER AUTHORIZATION)
+router.get("/:team_id", async (req, res) => {
+  try {
+    const { team_id } = req.params;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+
+    if (!token) {
+      return res.status(401).json({ error: "Authentication required" });
     }
 
-    const host = process.env.MAILHOG_HOST || "mailhog";
-    const port = Number(process.env.MAILHOG_SMTP_PORT || 1025);
-    const from = process.env.MAIL_FROM || "fixtures@valrift.local";
-    const socket = net.createConnection({ host, port });
-    const steps = [
-      "HELO valrift.local",
-      "MAIL FROM:<" + from + ">",
-      "RCPT TO:<" + to + ">",
-      "DATA",
-      [
-        "From: VALRIFT Champions <" + from + ">",
-        "To: " + to,
-        "Subject: " + subject,
-        "",
-        text,
-        ".",
-      ].join("\r\n"),
-      "QUIT",
-    ];
-    let index = 0;
+    let decoded;
+    try {
+      decoded = jwt.verify(token, SECRET);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
 
-    socket.setTimeout(3000);
-    socket.on("data", () => {
-      if (index < steps.length) {
-        smtpCommand(socket, steps[index]);
-        index += 1;
-      }
-    });
-    socket.on("error", (err) => {
-      console.warn("MailHog email skipped:", err.message);
-      resolve(false);
-    });
-    socket.on("timeout", () => {
-      socket.destroy();
-      resolve(false);
-    });
-    socket.on("close", () => resolve(true));
-  });
-}
-
-async function notifyReadyMatch(matchId) {
-  const matchRes = await pool.query(
-    `SELECT m.*, t1.name AS team1_name, t1.owner_email AS team1_email,
-            t2.name AS team2_name, t2.owner_email AS team2_email
-     FROM matches m
-     LEFT JOIN teams t1 ON t1.id=m.team1_id
-     LEFT JOIN teams t2 ON t2.id=m.team2_id
-     WHERE m.id=$1`,
-    [matchId]
-  );
-
-  if (!matchRes.rows.length) {
-    return;
-  }
-
-  const match = matchRes.rows[0];
-  if (!match.team1_id || !match.team2_id) {
-    return;
-  }
-
-  const scheduledAt = match.scheduled_time
-    ? new Date(match.scheduled_time).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
-    : "Schedule pending";
-  const subject = "VALRIFT next knockout match: " + match.team1_name + " vs " + match.team2_name;
-  const body =
-    "Your team has advanced. Your next knockout match is ready.\n\n" +
-    "Match: #" + match.id + "\n" +
-    "Opponent: " + match.team1_name + " vs " + match.team2_name + "\n" +
-    "Time: " + scheduledAt + "\n\n" +
-    "Good luck.";
-
-  await Promise.all([
-    sendMailHogEmail(match.team1_email, subject, body),
-    sendMailHogEmail(match.team2_email, subject, body),
-  ]);
-}
-
-
-/**
- * 🔥 GET TOURNAMENT DATA FOR A SPECIFIC PAID TEAM
- */
-router.get("/by-team/:teamId", async (req, res) => {
-  try {
-    const { teamId } = req.params;
-
-    const teamRes = await pool.query(
-      "SELECT * FROM teams WHERE id=$1",
-      [teamId]
+    // Get team details
+    const teamResult = await pool.query(
+      `SELECT * FROM teams WHERE id=$1`,
+      [team_id]
     );
 
-    if (!teamRes.rows.length || !teamRes.rows[0].tournament_id) {
-      return res.json({ tournament: null, teams: [], matches: [] });
+    if (teamResult.rows.length === 0) {
+      return res.status(404).json({ error: "Team not found" });
     }
 
-    const tournamentId = teamRes.rows[0].tournament_id;
+    const team = teamResult.rows[0];
 
-    const [tournament, teams, matches] = await Promise.all([
-      pool.query("SELECT * FROM tournaments WHERE id=$1", [tournamentId]),
-      pool.query("SELECT * FROM teams WHERE tournament_id=$1 ORDER BY id ASC", [tournamentId]),
-      pool.query(
-        `SELECT * FROM matches
-         WHERE tournament_id=$1
-         ORDER BY bracket_round ASC, bracket_position ASC, id ASC`,
-        [tournamentId]
-      ),
-    ]);
+    // AUTHORIZATION: Players can only see their own teams
+    if (decoded.role !== 'admin' && decoded.email !== team.owner_email) {
+      return res.status(403).json({ 
+        error: "Access denied. You can only view your own team's tournament." 
+      });
+    }
+
+    if (!team.tournament_id) {
+      return res.status(404).json({ error: "Team not assigned to tournament yet" });
+    }
+
+    // Get tournament details
+    const tournament = await pool.query(
+      `SELECT * FROM tournaments WHERE id=$1`,
+      [team.tournament_id]
+    );
+
+    if (tournament.rows.length === 0) {
+      return res.status(404).json({ error: "Tournament not found" });
+    }
+
+    // Get all teams in tournament
+    const teams = await pool.query(
+      `SELECT t.*, 
+        (SELECT COUNT(*) FROM players WHERE team_id=t.id) as player_count
+       FROM teams t
+       WHERE t.tournament_id=$1
+       ORDER BY t.tournament_position ASC`,
+      [team.tournament_id]
+    );
+
+    // Get all matches (FIXED: using round and position)
+    const matches = await pool.query(
+      `SELECT m.*, 
+        t1.name as team1_name,
+        t2.name as team2_name,
+        tw.name as winner_name
+       FROM matches m
+       LEFT JOIN teams t1 ON t1.id=m.team1_id
+       LEFT JOIN teams t2 ON t2.id=m.team2_id
+       LEFT JOIN teams tw ON tw.id=m.winner_id
+       WHERE m.tournament_id=$1
+       ORDER BY m.round ASC, m.position ASC, m.id ASC`,
+      [team.tournament_id]
+    );
+
+    // Get players for this specific team only (privacy)
+    const players = await pool.query(
+      `SELECT * FROM players WHERE team_id=$1 ORDER BY id ASC`,
+      [team_id]
+    );
 
     res.json({
-      tournament: tournament.rows[0] || null,
+      tournament: tournament.rows[0],
+      team: team,
       teams: teams.rows,
       matches: matches.rows,
+      players: players.rows,
     });
   } catch (err) {
+    console.error("Tournament fetch error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-/**
- * 🔥 GET CURRENT ACTIVE TOURNAMENT (AUTO)
- * No ID needed — always returns latest running/waiting
- */
-router.get("/current/:type", async (req, res) => {
+// Get tournament by type (for dashboard lookup)
+router.get("/lookup/:tournament_type", async (req, res) => {
   try {
-    const { type } = req.params;
+    const { tournament_type } = req.params;
+    const { team_id } = req.query;
+    const token = req.headers.authorization?.replace('Bearer ', '');
 
-    const result = await pool.query(
-      `SELECT * FROM tournaments 
-       WHERE type=$1 AND status IN ('waiting','running')
-       ORDER BY id DESC LIMIT 1`,
-      [type]
-    );
-
-    res.json(result.rows[0] || null);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-/**
- * 🔥 GET MATCHES FOR CURRENT TOURNAMENT (AUTO)
- */
-router.get("/matches/:type", async (req, res) => {
-  try {
-    const { type } = req.params;
-
-    const tRes = await pool.query(
-      `SELECT id FROM tournaments 
-       WHERE type=$1 AND status IN ('waiting','running')
-       ORDER BY id DESC LIMIT 1`,
-      [type]
-    );
-
-    if (!tRes.rows.length) {
-      return res.json([]);
+    if (!token) {
+      return res.status(401).json({ error: "Authentication required" });
     }
 
-    const tournamentId = tRes.rows[0].id;
-
-    const matches = await pool.query(
-      `SELECT * FROM matches 
-       WHERE tournament_id=$1 
-       ORDER BY bracket_round ASC, bracket_position ASC, id ASC`,
-      [tournamentId]
-    );
-
-    res.json(matches.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-/**
- * 🔥 GET TEAMS FOR CURRENT TOURNAMENT
- */
-router.get("/teams/:type", async (req, res) => {
-  try {
-    const { type } = req.params;
-
-    const tRes = await pool.query(
-      `SELECT id FROM tournaments 
-       WHERE type=$1 AND status IN ('waiting','running')
-       ORDER BY id DESC LIMIT 1`,
-      [type]
-    );
-
-    if (!tRes.rows.length) {
-      return res.json([]);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, SECRET);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid token" });
     }
 
-    const tournamentId = tRes.rows[0].id;
+    if (!team_id) {
+      return res.status(400).json({ error: "team_id required" });
+    }
+
+    // Get team and verify ownership
+    const teamResult = await pool.query(
+      `SELECT * FROM teams WHERE id=$1`,
+      [team_id]
+    );
+
+    if (teamResult.rows.length === 0) {
+      return res.status(404).json({ error: "Team not found" });
+    }
+
+    const team = teamResult.rows[0];
+
+    // AUTHORIZATION: Players can only lookup their own teams
+    if (decoded.role !== 'admin' && decoded.email !== team.owner_email) {
+      return res.status(403).json({ 
+        error: "Access denied. You can only view your own team's tournament." 
+      });
+    }
+
+    if (!team.tournament_id) {
+      return res.status(404).json({ error: "Team not assigned to tournament yet" });
+    }
+
+    // Forward to the main route
+    const tournament = await pool.query(
+      `SELECT * FROM tournaments WHERE id=$1`,
+      [team.tournament_id]
+    );
+
+    if (tournament.rows.length === 0) {
+      return res.status(404).json({ error: "Tournament not found" });
+    }
 
     const teams = await pool.query(
-      `SELECT * FROM teams WHERE tournament_id=$1`,
-      [tournamentId]
+      `SELECT t.*, 
+        (SELECT COUNT(*) FROM players WHERE team_id=t.id) as player_count
+       FROM teams t
+       WHERE t.tournament_id=$1
+       ORDER BY t.tournament_position ASC`,
+      [team.tournament_id]
     );
 
-    res.json(teams.rows);
+    const matches = await pool.query(
+      `SELECT m.*, 
+        t1.name as team1_name,
+        t2.name as team2_name,
+        tw.name as winner_name
+       FROM matches m
+       LEFT JOIN teams t1 ON t1.id=m.team1_id
+       LEFT JOIN teams t2 ON t2.id=m.team2_id
+       LEFT JOIN teams tw ON tw.id=m.winner_id
+       WHERE m.tournament_id=$1
+       ORDER BY m.round ASC, m.position ASC, m.id ASC`,
+      [team.tournament_id]
+    );
+
+    const players = await pool.query(
+      `SELECT * FROM players WHERE team_id=$1 ORDER BY id ASC`,
+      [team_id]
+    );
+
+    res.json({
+      tournament: tournament.rows[0],
+      team: team,
+      teams: teams.rows,
+      matches: matches.rows,
+      players: players.rows,
+    });
   } catch (err) {
+    console.error("Tournament lookup error:", err);
     res.status(500).json({ error: err.message });
   }
 });
-
-
-/**
- * 🔥 ADMIN: START MATCH
- */
-router.post("/start-match", async (req, res) => {
-  try {
-    const { match_id } = req.body;
-
-    if (!match_id) {
-      return res.status(400).json({
-        error: "match_id required",
-      });
-    }
-
-    await pool.query(
-      `UPDATE matches 
-       SET match_status='live' 
-       WHERE id=$1`,
-      [match_id]
-    );
-
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-/**
- * 🔥 ADMIN: SET WINNER + UPDATE WINS + CHECK FINAL WINNER
- */
-router.post("/set-winner", async (req, res) => {
-  try {
-    const { match_id, winner_id } = req.body;
-
-    if (!match_id || !winner_id) {
-      return res.status(400).json({
-        error: "match_id and winner_id required",
-      });
-    }
-
-    // 🔥 1. COMPLETE MATCH
-    const matchRes = await pool.query(
-      `UPDATE matches 
-       SET match_status='completed', winner_id=$1 
-       WHERE id=$2
-       RETURNING tournament_id, next_match_id, next_match_slot`,
-      [winner_id, match_id]
-    );
-
-    const completedMatch = matchRes.rows[0];
-    const tournamentId = completedMatch.tournament_id;
-
-    // 🔥 2. UPDATE TEAM WINS
-    await pool.query(
-      `UPDATE teams 
-       SET wins = wins + 1 
-       WHERE id=$1`,
-      [winner_id]
-    );
-
-    // 🔥 3. ADVANCE WINNER INTO NEXT KNOCKOUT MATCH
-    if (completedMatch.next_match_id) {
-      const slotColumn = Number(completedMatch.next_match_slot) === 2 ? "team2_id" : "team1_id";
-      await pool.query(
-        `UPDATE matches SET ${slotColumn}=$1 WHERE id=$2`,
-        [winner_id, completedMatch.next_match_id]
-      );
-      await notifyReadyMatch(completedMatch.next_match_id);
-    }
-
-    // 🔥 4. CHECK IF ALL MATCHES COMPLETED
-    const pending = await pool.query(
-      `SELECT COUNT(*) FROM matches 
-       WHERE tournament_id=$1 AND match_status!='completed'`,
-      [tournamentId]
-    );
-
-    if (parseInt(pending.rows[0].count) === 0) {
-      // 🔥 5. DECLARE FINAL WINNER
-      const finalWinner = await pool.query(
-        "SELECT * FROM teams WHERE id=$1",
-        [winner_id]
-      );
-
-      // 🔥 6. UPDATE TOURNAMENT STATUS
-      await pool.query(
-        `UPDATE tournaments 
-         SET status='completed' 
-         WHERE id=$1`,
-        [tournamentId]
-      );
-
-      return res.json({
-        success: true,
-        tournament_winner: finalWinner.rows[0],
-      });
-    }
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error("SET WINNER ERROR:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 
 module.exports = router;
