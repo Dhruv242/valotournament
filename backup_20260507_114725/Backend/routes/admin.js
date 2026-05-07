@@ -1,0 +1,234 @@
+const express = require("express");
+const router = express.Router();
+const jwt = require("jsonwebtoken");
+const pool = require("../db");
+
+const SECRET = process.env.JWT_SECRET || "supersecret";
+
+// Middleware to verify admin access
+function requireAdmin(req, res, next) {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, SECRET);
+    
+    if (decoded.role !== 'admin') {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    req.user = decoded;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: "Invalid token" });
+  }
+}
+
+// Get all tournaments with teams and players
+router.get("/tournaments/overview", requireAdmin, async (req, res) => {
+  try {
+    // Get all tournaments
+    const tournaments = await pool.query(`
+      SELECT * FROM tournaments 
+      ORDER BY created_at DESC, id DESC
+    `);
+
+    // For each tournament, get teams and players
+    const tournamentsWithDetails = await Promise.all(
+      tournaments.rows.map(async (tournament) => {
+        // Get teams for this tournament
+        const teams = await pool.query(`
+          SELECT 
+            t.*,
+            (SELECT COUNT(*) FROM players WHERE team_id = t.id) as player_count,
+            (SELECT status FROM payments WHERE team_id = t.id ORDER BY id DESC LIMIT 1) as payment_status
+          FROM teams t
+          WHERE t.tournament_id = $1
+          ORDER BY t.id ASC
+        `, [tournament.id]);
+
+        // Get players for each team
+        const teamsWithPlayers = await Promise.all(
+          teams.rows.map(async (team) => {
+            const players = await pool.query(`
+              SELECT * FROM players 
+              WHERE team_id = $1 
+              ORDER BY id ASC
+            `, [team.id]);
+
+            return {
+              ...team,
+              players: players.rows
+            };
+          })
+        );
+
+        // Get matches for this tournament
+        const matches = await pool.query(`
+          SELECT 
+            m.*,
+            t1.name as team1_name,
+            t2.name as team2_name,
+            tw.name as winner_name
+          FROM matches m
+          LEFT JOIN teams t1 ON t1.id = m.team1_id
+          LEFT JOIN teams t2 ON t2.id = m.team2_id
+          LEFT JOIN teams tw ON tw.id = m.winner_id
+          WHERE m.tournament_id = $1
+          ORDER BY m.bracket_round ASC, m.bracket_position ASC
+        `, [tournament.id]);
+
+        return {
+          ...tournament,
+          teams: teamsWithPlayers,
+          matches: matches.rows,
+          total_teams: teams.rows.length,
+          total_players: teamsWithPlayers.reduce((sum, team) => sum + team.players.length, 0)
+        };
+      })
+    );
+
+    res.json(tournamentsWithDetails);
+  } catch (err) {
+    console.error("Admin overview error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all teams (not in a tournament yet)
+router.get("/teams/unassigned", requireAdmin, async (req, res) => {
+  try {
+    const teams = await pool.query(`
+      SELECT 
+        t.*,
+        (SELECT COUNT(*) FROM players WHERE team_id = t.id) as player_count,
+        (SELECT status FROM payments WHERE team_id = t.id ORDER BY id DESC LIMIT 1) as payment_status
+      FROM teams t
+      WHERE t.tournament_id IS NULL
+      ORDER BY t.created_at DESC
+    `);
+
+    // Get players for each team
+    const teamsWithPlayers = await Promise.all(
+      teams.rows.map(async (team) => {
+        const players = await pool.query(`
+          SELECT * FROM players 
+          WHERE team_id = $1 
+          ORDER BY id ASC
+        `, [team.id]);
+
+        return {
+          ...team,
+          players: players.rows
+        };
+      })
+    );
+
+    res.json(teamsWithPlayers);
+  } catch (err) {
+    console.error("Unassigned teams error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all users
+router.get("/users", requireAdmin, async (req, res) => {
+  try {
+    const users = await pool.query(`
+      SELECT 
+        id, 
+        email, 
+        username, 
+        role, 
+        created_at,
+        (SELECT COUNT(*) FROM teams WHERE owner_email = users.email) as team_count
+      FROM users 
+      ORDER BY created_at DESC
+    `);
+
+    res.json(users.rows);
+  } catch (err) {
+    console.error("Users fetch error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get statistics
+router.get("/stats", requireAdmin, async (req, res) => {
+  try {
+    const stats = await pool.query(`
+      SELECT 
+        (SELECT COUNT(*) FROM tournaments) as total_tournaments,
+        (SELECT COUNT(*) FROM tournaments WHERE status = 'waiting') as waiting_tournaments,
+        (SELECT COUNT(*) FROM tournaments WHERE status = 'running') as running_tournaments,
+        (SELECT COUNT(*) FROM tournaments WHERE status = 'completed') as completed_tournaments,
+        (SELECT COUNT(*) FROM teams) as total_teams,
+        (SELECT COUNT(*) FROM teams WHERE tournament_id IS NULL) as unassigned_teams,
+        (SELECT COUNT(*) FROM players) as total_players,
+        (SELECT COUNT(*) FROM users) as total_users,
+        (SELECT COUNT(*) FROM matches) as total_matches,
+        (SELECT COUNT(*) FROM matches WHERE match_status = 'completed') as completed_matches
+    `);
+
+    res.json(stats.rows[0]);
+  } catch (err) {
+    console.error("Stats error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin action: Start a match
+router.post("/match/start", requireAdmin, async (req, res) => {
+  try {
+    const { match_id } = req.body;
+
+    if (!match_id) {
+      return res.status(400).json({ error: "match_id required" });
+    }
+
+    await pool.query(
+      `UPDATE matches SET match_status='live' WHERE id=$1`,
+      [match_id]
+    );
+
+    res.json({ success: true, message: "Match started" });
+  } catch (err) {
+    console.error("Start match error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin action: Set match winner
+router.post("/match/set-winner", requireAdmin, async (req, res) => {
+  try {
+    const { match_id, winner_id } = req.body;
+
+    if (!match_id || !winner_id) {
+      return res.status(400).json({ error: "match_id and winner_id required" });
+    }
+
+    // This uses the existing tournament.js logic
+    // Forward to the tournament route
+    const result = await pool.query(
+      `UPDATE matches 
+       SET match_status='completed', winner_id=$1 
+       WHERE id=$2
+       RETURNING *`,
+      [winner_id, match_id]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: "Match not found" });
+    }
+
+    res.json({ success: true, message: "Winner set", match: result.rows[0] });
+  } catch (err) {
+    console.error("Set winner error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+module.exports = router;

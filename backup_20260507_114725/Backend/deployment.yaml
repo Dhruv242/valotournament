@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: val-backend
+  labels:
+    app: val-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: val-backend
+  template:
+    metadata:
+      labels:
+        app: val-backend
+    spec:
+      containers:
+        - name: val-backend
+          image: 219865458704.dkr.ecr.ap-south-1.amazonaws.com/devops-testing:val-v1-39
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+
+          # ✅ Health Checks
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            failureThreshold: 3
+
+          # ✅ Resource Management (VERY IMPORTANT)
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
+
+          # ✅ Basic Env (expand later)
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: ADMIN_USERNAME
+              value: "skull_dk_up81"
+            - name: JWT_SECRET
+              value: "kSYmEXjemDEtUtOGZVM4jnf500nvIGZGfeM1pzveHB4aQ0233wFLj4Gx+PbOCICO"
+            - name: MAILHOG_HOST
+              value: "mailhog"
+            - name: MAILHOG_SMTP_PORT
+              value: "1025"
+            - name: MAIL_FROM
+              value: "fixtures@valrift.local"
+
+          # ✅ Graceful shutdown
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+
+      restartPolicy: Always

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VALRIFT Champions | Valorant Tournament Hub</title>
+    <meta
+      name="description"
+      content="Premium Valorant tournament registration, payment, and bracket tracking for amateur and pro squads."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Rajdhani:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-carousel" aria-hidden="true">
+      <span class="bg-slide cypher"></span>
+      <span class="bg-slide jett"></span>
+      <span class="bg-slide omen"></span>
+      <span class="bg-slide sova"></span>
+      <span class="bg-slide viper"></span>
+    </div>
+    <div class="site-shell">
+      <header class="hero">
+        <nav class="topbar">
+          <div class="brand">
+            <span class="brand-mark"></span>
+            <div>
+              <p class="eyebrow">Valorant Tournament Platform</p>
+              <h1>VALRIFT Champions</h1>
+            </div>
+          </div>
+          <div class="topbar-actions">
+            <div class="topbar-links">
+              <a href="#home" data-nav="home">Home</a>
+              <a href="#tiers" data-nav="tiers">Tiers</a>
+              <a href="#register" data-nav="register">Register</a>
+              <a href="#dashboard" data-nav="dashboard">Dashboard</a>
+              <a href="#admin" data-nav="admin">Admin</a>
+            </div>
+            <div class="auth-menu">
+              <button class="button button-secondary small" id="auth-toggle" type="button">Sign In</button>
+              <div class="panel auth-dropdown hidden" id="auth-dropdown">
+                <form id="auth-form" class="stack-form compact">
+                  <div class="form-header">
+                    <h4>Account Access</h4>
+                    <p>Use your Gmail and a unique player username.</p>
+                  </div>
+                  <label>
+                    Gmail
+                    <input id="auth-email" name="auth-email" type="email" placeholder="player@gmail.com" required />
+                  </label>
+                  <label>
+                    Username
+                    <input id="auth-username" name="auth-username" placeholder="neon_player" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" required />
+                  </label>
+                  <label>
+                    Password
+                    <input id="auth-password" name="auth-password" type="password" placeholder="Create or enter password" minlength="8" required />
+                  </label>
+                  <label>
+                    Access Role
+                    <select id="auth-role" name="auth-role" required>
+                      <option value="player">Player</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </label>
+                  <button class="button button-primary" type="submit">Continue With Gmail</button>
+                  <button class="button button-secondary" id="logout-button" type="button">Sign Out</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <section class="hero-grid app-view active-view" id="home" data-view="home">
+          <div class="hero-copy panel">
+            <p class="eyebrow accent">Season Queue Is Live</p>
+            <h2 class="multicolor-title">Where Champions Are Crafted and Only the Exceptional Compete</h2>
+            <p class="hero-text">
+              Amateur and pro squads register, pay through Razorpay, enter a 6-team pool,
+              and automatically roll into the next tournament once a bracket fills up.
+            </p>
+            <div class="hero-actions">
+              <button class="button button-primary" id="hero-signin" type="button">Sign In To Register</button>
+              <a class="button button-secondary" href="#dashboard">Open Team Dashboard</a>
+            </div>
+            <div class="hero-stats">
+              <article>
+                <strong>6</strong>
+                <span>Teams per tournament</span>
+              </article>
+              <article>
+                <strong>5</strong>
+                <span>Knockout fixtures</span>
+              </article>
+              <article>
+                <strong>INR 2,000</strong>
+                <span>Top prize pool</span>
+              </article>
+            </div>
+          </div>
+
+          <aside class="hero-visual panel">
+            <div class="agent-wall" aria-hidden="true">
+              <div class="agent-card agent-jett"><span></span></div>
+              <div class="agent-card agent-reyna"><span></span></div>
+              <div class="agent-card agent-omen"><span></span></div>
+              <div class="agent-card agent-phoenix"><span></span></div>
+              <div class="agent-card agent-sage"><span></span></div>
+              <div class="agent-card agent-viper"><span></span></div>
+            </div>
+            <div class="hero-glow"></div>
+            <div class="visual-label">Valorant Agent Wall</div>
+            <div class="visual-map">
+              <div class="visual-node node-a">Alpha</div>
+              <div class="visual-node node-b">Bravo</div>
+              <div class="visual-node node-c">Charlie</div>
+              <div class="visual-node node-d">Delta</div>
+              <div class="visual-node node-e">Echo</div>
+              <div class="visual-node node-f">Foxtrot</div>
+            </div>
+            <div class="visual-footer">
+              <span>Auto-fill tournament buckets</span>
+              <span>Winner reveal on completion</span>
+            </div>
+          </aside>
+        </section>
+      </header>
+
+      <main>
+        <section class="section app-view" id="tiers" data-view="tiers">
+          <div class="section-heading">
+            <p class="eyebrow accent">Tournament Tiers</p>
+            <h3>Choose your queue.</h3>
+          </div>
+          <div class="tier-grid">
+            <article class="tier-card amateur">
+              <p class="tier-tag">Amateur Queue</p>
+              <h4>Entry for upcoming squads</h4>
+              <div class="tier-price">INR 250</div>
+              <ul>
+                <li>6 teams per tournament</li>
+                <li>Prize: INR 1,000</li>
+                <li>Knockout bracket tree</li>
+              </ul>
+              <button class="button button-primary tier-pick" data-tier="amateur">Enter Amateur</button>
+            </article>
+            <article class="tier-card pro">
+              <p class="tier-tag">Pro Queue</p>
+              <h4>Competitive bracket for established rosters</h4>
+              <div class="tier-price">INR 500</div>
+              <ul>
+                <li>6 teams per tournament</li>
+                <li>Prize: INR 2,000</li>
+                <li>Separate premium bracket access</li>
+              </ul>
+              <button class="button button-primary tier-pick" data-tier="pro">Enter Pro</button>
+            </article>
+          </div>
+        </section>
+
+        <section class="section feature-band app-view active-view" data-view="home">
+          <article class="feature-card panel">
+            <p class="eyebrow">Auth</p>
+            <h4>Gmail-based access</h4>
+            <p>Players sign in with Gmail and reserve one unique username for tournament identity.</p>
+          </article>
+          <article class="feature-card panel">
+            <p class="eyebrow">Flow</p>
+            <h4>Create team</h4>
+            <p>Register a squad identity first, then add up to 6 Valorant players with Riot IDs.</p>
+          </article>
+          <article class="feature-card panel">
+            <p class="eyebrow">Payment</p>
+            <h4>Razorpay checkout</h4>
+            <p>Trigger order creation, complete payment, and verify the signature through your backend.</p>
+          </article>
+          <article class="feature-card panel">
+            <p class="eyebrow">Access</p>
+            <h4>Bracket dashboard</h4>
+            <p>Paid teams can reopen their tournament dashboard and follow waiting or running fixtures.</p>
+          </article>
+        </section>
+
+        <section class="section registration-layout app-view" id="register" data-view="register">
+          <div class="section-heading">
+            <p class="eyebrow accent">Registration Console</p>
+            <h3>Sign in with Gmail, then build the roster and lock the slot.</h3>
+          </div>
+
+          <div class="panel auth-first-banner" id="auth-first-banner">
+            <p class="eyebrow accent">Step 1</p>
+            <h4>Gmail sign-in before team registration.</h4>
+            <p>Players and admins must authenticate with a Gmail account first. Usernames are reserved by the backend.</p>
+            <button class="button button-primary" id="register-signin" type="button">Open Sign In</button>
+          </div>
+
+          <div class="registration-grid locked" id="registration-grid">
+            <div class="panel registration-panel">
+              <form id="team-form" class="stack-form">
+                <div class="form-header">
+                  <h4>1. Team Setup</h4>
+                  <p>Create a team record in the backend.</p>
+                </div>
+                <label>
+                  Team Name
+                  <input id="team-name" name="team-name" placeholder="Neon Vipers" required />
+                </label>
+                <button class="button button-primary" type="submit">Create Team</button>
+              </form>
+
+              <form id="player-form" class="stack-form">
+                <div class="form-header">
+                  <h4>2. Player Registration</h4>
+                  <p>Add up to 6 players to the selected team.</p>
+                </div>
+                <label>
+                  Full Name
+                  <input id="player-name" name="player-name" placeholder="Ayush" />
+                </label>
+                <label>
+                  Valorant Name
+                  <input id="valorant-name" name="valorant-name" placeholder="AstraShot" required />
+                </label>
+                <label>
+                  Tag
+                  <input id="valorant-tag" name="valorant-tag" placeholder="IND" required />
+                </label>
+                <button class="button button-secondary" type="submit">Add Player</button>
+              </form>
+
+              <form id="payment-form" class="stack-form">
+                <div class="form-header">
+                  <h4>3. Tournament Payment</h4>
+                  <p>Choose amateur or pro, then launch Razorpay.</p>
+                </div>
+                <label>
+                  Tournament Type
+                  <select id="tournament-type" name="tournament-type" required>
+                    <option value="amateur">Amateur - INR 250</option>
+                    <option value="pro">Pro - INR 500</option>
+                  </select>
+                </label>
+                <button class="button button-primary" type="submit">Pay & Join Tournament</button>
+              </form>
+            </div>
+
+            <aside class="panel registration-status">
+              <div class="status-card">
+                <p class="eyebrow accent">Signed In User</p>
+                <h4 id="auth-status-name">Guest</h4>
+                <p id="auth-status-role">Login required for protected screens.</p>
+              </div>
+              <div class="status-card">
+                <p class="eyebrow">Access Scope</p>
+                <ul id="auth-capabilities" class="capability-list"></ul>
+              </div>
+              <div class="status-card">
+                <p class="eyebrow accent">Current Session</p>
+                <h4 id="session-team-name">No team selected</h4>
+                <p id="session-team-id">Create a team to begin.</p>
+              </div>
+              <div class="status-card">
+                <p class="eyebrow">Roster</p>
+                <ul id="roster-list" class="roster-list"></ul>
+              </div>
+              <div class="status-card" id="activity-card">
+                <p class="eyebrow">Activity</p>
+                <div id="activity-feed" class="activity-feed"></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="section dashboard-layout app-view" id="dashboard" data-view="dashboard">
+          <div class="section-heading">
+            <p class="eyebrow accent">Team Dashboard</p>
+            <h3>Open your knockout tree, opponent, and match mail schedule.</h3>
+          </div>
+
+          <div class="dashboard-grid">
+            <div class="panel lookup-panel">
+              <form id="lookup-form" class="stack-form compact">
+                <div class="form-header">
+                  <h4>Bracket Lookup</h4>
+                  <p>Use the team you just registered or enter a known team ID.</p>
+                </div>
+                <label>
+                  Team ID
+                  <input id="lookup-team-id" name="lookup-team-id" placeholder="Auto-filled after registration" />
+                </label>
+                <label>
+                  Tournament Type
+                  <select id="lookup-type" name="lookup-type" required>
+                    <option value="amateur">Amateur</option>
+                    <option value="pro">Pro</option>
+                  </select>
+                </label>
+                <button class="button button-primary" type="submit">Load Tournament View</button>
+              </form>
+            </div>
+
+            <div class="panel queue-panel">
+              <div class="queue-header">
+                <div>
+                  <p class="eyebrow">Queue Snapshot</p>
+                  <h4 id="queue-title">Waiting for team access</h4>
+                </div>
+                <button class="button button-secondary small" id="refresh-dashboard" type="button">Refresh</button>
+              </div>
+              <div id="queue-summary" class="queue-summary"></div>
+              <div id="bracket-map" class="bracket-map empty"></div>
+            </div>
+
+            <div class="panel fixtures-panel">
+              <div class="queue-header">
+                <div>
+                  <p class="eyebrow">Fixture Board</p>
+                  <h4>Knockout matches</h4>
+                </div>
+              </div>
+              <div id="fixture-list" class="fixture-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Admin Section -->
+        <section class="section admin-layout app-view" id="admin" data-view="admin">
+          <div class="section-heading">
+            <p class="eyebrow accent">Admin Control Panel</p>
+            <h3>Tournament Management & Overview</h3>
+          </div>
+
+          <div class="admin-stats panel">
+            <div class="stat-card">
+              <strong id="stat-tournaments">0</strong>
+              <span>Total Tournaments</span>
+            </div>
+            <div class="stat-card">
+              <strong id="stat-teams">0</strong>
+              <span>Total Teams</span>
+            </div>
+            <div class="stat-card">
+              <strong id="stat-players">0</strong>
+              <span>Total Players</span>
+            </div>
+            <div class="stat-card">
+              <strong id="stat-users">0</strong>
+              <span>Registered Users</span>
+            </div>
+          </div>
+
+          <div class="admin-grid">
+            <div class="panel admin-tournaments">
+              <div class="admin-panel-header">
+                <h4>All Tournaments</h4>
+                <button class="button button-secondary small" id="refresh-admin">Refresh</button>
+              </div>
+              <div id="admin-tournaments-list" class="admin-list"></div>
+            </div>
+
+            <div class="panel admin-unassigned">
+              <div class="admin-panel-header">
+                <h4>Unassigned Teams</h4>
+                <p class="muted-text">Teams waiting for tournament assignment</p>
+              </div>
+              <div id="admin-unassigned-list" class="admin-list"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
