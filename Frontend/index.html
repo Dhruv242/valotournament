@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>VALRIFT Champions | Valorant Tournament Hub</title>
+    <title>VALO Champions | Valorant Tournament Hub</title>
     <meta
       name="description"
       content="Premium Valorant tournament registration, payment, and bracket tracking for amateur and pro squads."
@@ -28,10 +28,14 @@
       <header class="hero">
         <nav class="topbar">
           <div class="brand">
-            <span class="brand-mark"></span>
+            <img
+              class="brand-mark"
+              src="https://media.valorant-api.com/agents/add6443a-41bd-e414-f6ad-e58d267f4e95/displayicon.png"
+              alt="Jett — VALO Champions"
+            />
             <div>
               <p class="eyebrow">Valorant Tournament Platform</p>
-              <h1>VALRIFT Champions</h1>
+              <h1>VALO Champions</h1>
             </div>
           </div>
           <div class="topbar-actions">
@@ -82,7 +86,7 @@
             <p class="eyebrow accent">Season Queue Is Live</p>
             <h2 class="multicolor-title">Where Champions Are Crafted and Only the Exceptional Compete</h2>
             <p class="hero-text">
-              Amateur and pro squads register, pay through Razorpay, enter a 6-team pool,
+              Amateur and pro squads register, pay through Razorpay, enter an 8-team pool,
               and automatically roll into the next tournament once a bracket fills up.
             </p>
             <div class="hero-actions">
@@ -211,6 +215,14 @@
                   Team Name
                   <input id="team-name" name="team-name" placeholder="Neon Vipers" required />
                 </label>
+                <div class="agent-picker-wrap">
+                  <p class="eyebrow accent">Pick Your Squad Agent</p>
+                  <p class="agent-picker-help">Your team will represent this agent across the bracket.</p>
+                  <div class="agent-picker" id="agent-picker">
+                    <p class="agent-picker-loading">Loading agents…</p>
+                  </div>
+                  <input type="hidden" id="team-agent-id" name="team-agent-id" />
+                </div>
                 <button class="button button-primary" type="submit">Create Team</button>
               </form>
 

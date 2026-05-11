@@ -32,7 +32,7 @@ router.post("/create-order", async (req, res) => {
       [team_id, order.id, amount, currency]
     );
 
-    res.json({ order });
+    res.json(order);
   } catch (err) {
     console.error("Create order error:", err);
     res.status(500).json({ error: err.message });

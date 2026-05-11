@@ -5,11 +5,12 @@ const pool = require("../db");
 async function ensureTeamOwnerColumns() {
   await pool.query("ALTER TABLE teams ADD COLUMN IF NOT EXISTS owner_email TEXT");
   await pool.query("ALTER TABLE teams ADD COLUMN IF NOT EXISTS user_id INTEGER");
+  await pool.query("ALTER TABLE teams ADD COLUMN IF NOT EXISTS agent_id TEXT");
 }
 
 // ➕ Create team
 router.post("/", async (req, res) => {
-  const { name } = req.body;
+  const { name, agent_id } = req.body;
   const ownerEmail = String(req.headers["x-user-email"] || req.body.owner_email || "").trim().toLowerCase();
   const userId = req.headers["x-user-id"] || req.body.user_id || null;
 
@@ -17,8 +18,8 @@ router.post("/", async (req, res) => {
     await ensureTeamOwnerColumns();
 
     const result = await pool.query(
-      "INSERT INTO teams (name, owner_email, user_id) VALUES ($1, $2, $3) RETURNING *",
-      [name, ownerEmail || null, userId || null]
+      "INSERT INTO teams (name, owner_email, user_id, agent_id) VALUES ($1, $2, $3, $4) RETURNING *",
+      [name, ownerEmail || null, userId || null, agent_id || null]
     );
 
     res.json(result.rows[0]);

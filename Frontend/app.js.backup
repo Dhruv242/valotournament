@@ -16,8 +16,6 @@
     roster: [],
     selectedType: "amateur",
     dashboard: null,
-    agents: {},          // uuid -> { uuid, displayName, displayIcon, displayIconSmall, role }
-    selectedAgentId: null,
   };
 
   const elements = {
@@ -57,8 +55,6 @@
     queueSummary: document.getElementById("queue-summary"),
     bracketMap: document.getElementById("bracket-map"),
     fixtureList: document.getElementById("fixture-list"),
-    agentPicker: document.getElementById("agent-picker"),
-    teamAgentId: document.getElementById("team-agent-id"),
   };
 
   function openAuthDropdown() {
@@ -435,15 +431,10 @@
       return;
     }
 
-    if (!state.selectedAgentId) {
-      showToast("Pick an agent", "Choose the agent your squad will represent.");
-      return;
-    }
-
     try {
       const team = await apiRequest("/teams", {
         method: "POST",
-        body: JSON.stringify({ name: name, agent_id: state.selectedAgentId }),
+        body: JSON.stringify({ name: name }),
         headers: {
           "X-User-Email": state.auth.email,
           "X-User-Id": state.auth.userId || "",
@@ -529,29 +520,24 @@
         }),
       });
 
-      // Capture order_id before opening Razorpay
-      const orderId = order.id;
-
       const razorpay = new window.Razorpay({
         key: config.razorpayKeyId,
         amount: order.amount,
         currency: order.currency,
         name: config.appName || "VALRIFT Champions",
         description: state.selectedType === "pro" ? "Pro Queue Entry" : "Amateur Queue Entry",
-        order_id: orderId,
+        order_id: order.id,
         theme: {
           color: "#2bd2ff",
         },
         handler: async function onPaymentSuccess(response) {
           try {
-            await apiRequest("/payments/verify-payment", {
+            await apiRequest("/payments/verify", {
               method: "POST",
               body: JSON.stringify({
-                razorpay_order_id: orderId,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
+                ...response,
                 team_id: state.team.id,
-                tournament_type: state.selectedType,
+                type: state.selectedType,
               }),
             });
             pushActivity(
@@ -599,22 +585,22 @@
       : "No active tournament found";
 
     const teamCount = teams.length;
-    const nextSlot = Math.min(teamCount + 1, 8);
+    const nextSlot = Math.min(teamCount + 1, 6);
     const userTeam = teams.find(function findCurrent(team) {
       return String(team.id) === String(teamId);
     });
 
     const summaryBits = [
       { label: "Status", value: tournament ? tournament.status : "waiting" },
-      { label: "Teams Filled", value: teamCount + "/8" },
+      { label: "Teams Filled", value: teamCount + "/6" },
       { label: "Entry Fee", value: "INR " + (tournament ? tournament.entry_fee : type === "pro" ? "500" : "250") },
-      { label: "Prize", value: "INR " + (tournament ? tournament.prize_pool : type === "pro" ? "2000" : "1000") },
+      { label: "Prize", value: "INR " + (tournament ? tournament.prize : type === "pro" ? "2000" : "1000") },
     ];
 
     if (!userTeam) {
       summaryBits.push({
         label: "Team Position",
-        value: teamCount >= 8 ? "Next bracket likely created" : "Queued for slot " + nextSlot,
+        value: teamCount >= 6 ? "Next bracket likely created" : "Queued for slot " + nextSlot,
       });
     } else {
       summaryBits.push({
@@ -640,8 +626,8 @@
     if (!matches.length) {
       elements.bracketMap.className = "bracket-map empty";
       elements.bracketMap.textContent =
-        teamCount < 8
-          ? "Your knockout tree appears once all 8 paid teams join this tournament."
+        teamCount < 6
+          ? "Your knockout tree appears once all 6 paid teams join this tournament."
           : "No knockout tree returned by the backend yet.";
       elements.fixtureList.className = "fixture-list empty";
       elements.fixtureList.textContent = "Match email notices will appear after bracket scheduling.";
@@ -654,34 +640,8 @@
       })
     );
 
-    const teamAgents = new Map(
-      teams.map(function toAgentEntry(team) {
-        return [String(team.id), team.agent_id || null];
-      })
-    );
-
     function teamName(id) {
       return id ? teamNames.get(String(id)) || "Winner TBD" : "Winner TBD";
-    }
-
-    function teamAvatarUrl(id) {
-      const agentId = id ? teamAgents.get(String(id)) : null;
-      const agent = agentId ? state.agents[agentId] : null;
-      if (agent && (agent.displayIconSmall || agent.displayIcon)) {
-        return agent.displayIconSmall || agent.displayIcon;
-      }
-      // Transparent 1x1 fallback so the circle is still visible via background
-      return "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'/>";
-    }
-
-    function renderTeamSlot(id) {
-      return (
-        '<div class="tree-team"><img class="agent-avatar" src="' +
-        teamAvatarUrl(id) +
-        '" alt="" /><strong>' +
-        escapeHtml(teamName(id)) +
-        "</strong></div>"
-      );
     }
 
     const rounds = [
@@ -694,7 +654,7 @@
     elements.bracketMap.innerHTML = rounds
       .map(function mapRound(round) {
         const roundMatches = matches.filter(function byRound(match) {
-          return Number(match.round || 1) === round.key;
+          return Number(match.bracket_round || 1) === round.key;
         });
 
         return (
@@ -715,11 +675,11 @@
                 status +
                 '"><span class="slot-label">Match #' +
                 escapeHtml(match.id) +
-                "</span>" +
-                renderTeamSlot(match.team1_id) +
-                '<span class="versus">vs</span>' +
-                renderTeamSlot(match.team2_id) +
-                "<small>" +
+                '</span><strong>' +
+                escapeHtml(teamName(match.team1_id)) +
+                '</strong><span class="versus">vs</span><strong>' +
+                escapeHtml(teamName(match.team2_id)) +
+                '</strong><small>' +
                 escapeHtml(scheduledAt) +
                 "</small></article>"
               );
@@ -780,7 +740,7 @@
       let teams;
       let matches;
 
-      const teamDashboard = await apiRequest("/tournaments/" + teamId);
+      const teamDashboard = await apiRequest("/tournaments/by-team/" + teamId);
       if (teamDashboard && teamDashboard.tournament) {
         tournament = teamDashboard.tournament;
         teams = teamDashboard.teams || [];
@@ -1021,82 +981,11 @@
     }
   }
 
-  async function loadAgents() {
-    if (!elements.agentPicker) return;
-    try {
-      const response = await window.fetch(
-        "https://valorant-api.com/v1/agents?isPlayableCharacter=true"
-      );
-      const payload = await response.json();
-      const list = (payload && payload.data) || [];
-      list.sort(function byName(a, b) {
-        return String(a.displayName).localeCompare(String(b.displayName));
-      });
-
-      list.forEach(function indexAgent(agent) {
-        state.agents[agent.uuid] = {
-          uuid: agent.uuid,
-          displayName: agent.displayName,
-          displayIcon: agent.displayIcon,
-          displayIconSmall: agent.displayIconSmall,
-          role: agent.role && agent.role.displayName,
-        };
-      });
-
-      renderAgentPicker(list);
-    } catch (err) {
-      elements.agentPicker.innerHTML =
-        '<p class="agent-picker-loading">Could not load agents. Check your connection and refresh.</p>';
-    }
-  }
-
-  function renderAgentPicker(list) {
-    if (!elements.agentPicker) return;
-    elements.agentPicker.innerHTML = list
-      .map(function toCard(agent) {
-        const icon = agent.displayIconSmall || agent.displayIcon;
-        return (
-          '<button type="button" class="agent-option" data-agent-id="' +
-          agent.uuid +
-          '"><img loading="lazy" src="' +
-          icon +
-          '" alt="' +
-          escapeHtml(agent.displayName) +
-          '" /><span>' +
-          escapeHtml(agent.displayName) +
-          "</span></button>"
-        );
-      })
-      .join("");
-
-    elements.agentPicker.querySelectorAll(".agent-option").forEach(function bind(btn) {
-      btn.addEventListener("click", function onPick() {
-        const id = btn.getAttribute("data-agent-id");
-        selectAgent(id);
-      });
-    });
-  }
-
-  function selectAgent(agentId) {
-    state.selectedAgentId = agentId;
-    if (elements.teamAgentId) {
-      elements.teamAgentId.value = agentId;
-    }
-    if (!elements.agentPicker) return;
-    elements.agentPicker.querySelectorAll(".agent-option").forEach(function mark(btn) {
-      btn.classList.toggle(
-        "selected",
-        btn.getAttribute("data-agent-id") === agentId
-      );
-    });
-  }
-
   loadSession();
   setView((window.location.hash || "#home").replace("#", "") || "home");
   renderSession();
   bindEvents();
   initEmptyDashboard();
-  loadAgents();
 
   if (state.team && isAdmin()) {
     pushActivity("Session restored", "Continuing from saved team ID #" + state.team.id + ".");

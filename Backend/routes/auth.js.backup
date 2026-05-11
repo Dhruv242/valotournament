@@ -92,7 +92,7 @@ router.post("/login", async (req, res) => {
         
         const updated = await pool.query(
           `UPDATE users
-           SET password_hash=$1, password_salt=$2
+           SET password_hash=$1, password_salt=$2, updated_at=NOW()
            WHERE email=$3
            RETURNING id, email, username, role`,
           [passwordHash, salt, email]

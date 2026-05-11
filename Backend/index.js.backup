@@ -1,6 +1,9 @@
 const express = require("express");
 const cors = require("cors");
+
 const app = express();
+const matchRoutes = require("./routes/matches");
+app.use("/matches", matchRoutes);
 
 app.use(cors());
 app.use(express.json());
@@ -11,11 +14,11 @@ const playerRoutes = require("./routes/player");
 const tournamentRoutes = require("./routes/tournament");
 const paymentRoutes = require("./routes/payment");
 const authRoutes = require("./routes/auth");
-const adminRoutes = require("./routes/admin");
-const matchRoutes = require("./routes/matches");
 
 // ✅ Health
 app.get("/health", (req, res) => res.send("OK"));
+
+// ✅ Ready (DB check)
 app.get("/ready", async (req, res) => {
   try {
     const pool = require("./db");
@@ -37,8 +40,6 @@ app.use("/players", playerRoutes);
 app.use("/tournaments", tournamentRoutes);
 app.use("/payments", paymentRoutes);
 app.use("/auth", authRoutes);
-app.use("/admin", adminRoutes);
-app.use("/matches", matchRoutes);
 
 // ❗ Global error handler
 app.use((err, req, res, next) => {
