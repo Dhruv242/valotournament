@@ -678,6 +678,18 @@
         }),
       });
 
+      // [PAYMENTS_DISABLED testing bypass — server short-circuits with `bypassed`]
+      if (order && order.bypassed) {
+        showToast("Test mode", "Payment skipped — team slotted into tournament.");
+        pushActivity("Test bypass", state.team.name + " was slotted without a payment (PAYMENTS_DISABLED).");
+        try {
+          await loadDashboard(state.team.id, state.selectedType);
+          setView("dashboard");
+        } catch (e) { /* best-effort */ }
+        return;
+      }
+      // [/PAYMENTS_DISABLED]
+
       upiState = {
         orderId: order.order_id,
         tr: order.tr,
@@ -933,6 +945,7 @@
       .join("");
 
     elements.fixtureList.className = "fixture-list";
+    const myTeamId = state.team && state.team.id ? Number(state.team.id) : null;
     elements.fixtureList.innerHTML = matches
       .map(function mapMatch(match) {
         const status = normalizeStatus(match.match_status || match.status);
@@ -942,6 +955,17 @@
         const scheduledAt = match.scheduled_time
           ? new Date(match.scheduled_time).toLocaleString()
           : "Schedule pending";
+        // [party_id feature — remove this block to revert]
+        const inThisMatch =
+          myTeamId !== null &&
+          (Number(match.team1_id) === myTeamId || Number(match.team2_id) === myTeamId);
+        const partyBlock = (inThisMatch && match.party_id)
+          ? '<div class="party-badge"><span class="party-label">Lobby Code</span>' +
+            '<code class="party-code">' + escapeHtml(match.party_id) + '</code>' +
+            '<button type="button" class="button button-secondary small" data-copy-party="' +
+            escapeHtml(match.party_id) + '">Copy</button></div>'
+          : '';
+        // [/party_id feature]
         return (
           '<article class="fixture-card">' +
           '<div class="fixture-card-header"><span>Match #' +
@@ -956,6 +980,7 @@
           '</span><span>vs</span><span>' +
           escapeHtml(team2) +
           "</span></div>" +
+          partyBlock +
           '<div class="slot-meta">Winner: ' +
           escapeHtml(winner) +
           "</div>" +
@@ -965,6 +990,21 @@
         );
       })
       .join("");
+
+    // [party_id feature — copy-to-clipboard wiring; remove to revert]
+    elements.fixtureList.querySelectorAll("[data-copy-party]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const code = btn.getAttribute("data-copy-party") || "";
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(code)
+            .then(function () { showToast("Copied", "Lobby code copied to clipboard."); })
+            .catch(function () { showToast("Copy failed", "Select and copy " + code + " manually."); });
+        } else {
+          showToast("Copy", code);
+        }
+      });
+    });
+    // [/party_id feature]
   }
 
   async function loadDashboard(teamId, type) {
@@ -1634,6 +1674,12 @@
       '<input type="datetime-local" data-act="schedule-input" value="' + escapeHtml(scheduledValue) + '" />' +
       '</label>' +
       '<button type="button" class="button button-secondary small" data-act="schedule">Save Time</button>' +
+      // [party_id feature — remove this label+button block to revert]
+      '<label>Party ID' +
+      '<input type="text" data-act="party-input" maxlength="32" placeholder="lobby code" value="' + escapeHtml(m.party_id || '') + '" />' +
+      '</label>' +
+      '<button type="button" class="button button-secondary small" data-act="party">Save Party ID</button>' +
+      // [/party_id feature]
       (!isCompleted && !isLive && m.team1_id && m.team2_id
         ? '<button type="button" class="button button-primary small" data-act="start">Start</button>'
         : '') +
@@ -1667,13 +1713,27 @@
     document.querySelectorAll('.admin-match').forEach(function (row) {
       const matchId = row.getAttribute('data-match-id');
       const scheduleInput = row.querySelector('[data-act="schedule-input"]');
+      const partyInput = row.querySelector('[data-act="party-input"]');
 
       row.querySelectorAll('[data-act]').forEach(function (el) {
         const act = el.getAttribute('data-act');
-        if (act === 'schedule-input') return; // input itself, no click handler
+        if (act === 'schedule-input' || act === 'party-input') return; // inputs, no click handler
 
         el.addEventListener('click', async function () {
           try {
+            // [party_id feature — remove this `party` branch to revert]
+            if (act === 'party') {
+              const val = partyInput ? partyInput.value.trim() : '';
+              await apiRequest('/admin/match/party-id', {
+                method: 'POST',
+                body: JSON.stringify({ match_id: Number(matchId), party_id: val }),
+              });
+              showToast(val ? 'Party ID saved' : 'Party ID cleared',
+                val ? ('Players in this match will see: ' + val) : 'No code shown to players.');
+              loadAdminDashboard();
+              return;
+            }
+            // [/party_id feature]
             if (act === 'schedule') {
               const val = scheduleInput && scheduleInput.value;
               if (!val) {

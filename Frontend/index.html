@@ -110,50 +110,191 @@
           </div>
         </nav>
 
-        <section class="hero-grid app-view active-view" id="home" data-view="home">
-          <div class="hero-copy panel">
-            <p class="eyebrow accent">Season Queue Is Live</p>
-            <h2 class="multicolor-title">Where Champions Are Crafted and Only the Exceptional Compete</h2>
-            <p class="hero-text">
-              Amateur and pro squads register, pay via UPI, enter an 8-team pool,
-              and automatically roll into the next tournament once a bracket fills up.
-            </p>
-            <div class="hero-actions">
-              <button class="button button-primary" id="hero-signin" type="button">Sign In To Register</button>
-              <a class="button button-secondary" href="#dashboard" data-nav="dashboard">Open Team Dashboard</a>
+        <section class="app-view active-view home-view" id="home" data-view="home">
+          <div class="hero-grid">
+            <div class="hero-copy panel">
+              <p class="eyebrow accent">Season Queue Is Live</p>
+              <h2 class="multicolor-title">Where Champions Are Crafted and Only the Exceptional Compete</h2>
+              <p class="hero-text">
+                Amateur and pro squads register, pay via UPI, enter an 8-team pool,
+                and automatically roll into the next tournament once a bracket fills up.
+              </p>
+              <div class="hero-actions">
+                <button class="button button-primary" id="hero-signin" type="button">Sign In To Register</button>
+                <a class="button button-secondary" href="#dashboard" data-nav="dashboard">Open Team Dashboard</a>
+              </div>
+              <div class="hero-stats">
+                <article>
+                  <strong>8</strong>
+                  <span>Teams per tournament</span>
+                </article>
+                <article>
+                  <strong>7</strong>
+                  <span>Knockout fixtures</span>
+                </article>
+                <article>
+                  <strong>INR 2,000</strong>
+                  <span>Top prize pool</span>
+                </article>
+              </div>
             </div>
-            <div class="hero-stats">
-              <article>
-                <strong>8</strong>
-                <span>Teams per tournament</span>
-              </article>
-              <article>
-                <strong>7</strong>
-                <span>Knockout fixtures</span>
-              </article>
-              <article>
-                <strong>INR 2,000</strong>
-                <span>Top prize pool</span>
-              </article>
-            </div>
+
+            <aside class="hero-visual panel champion-aside">
+              <div class="hero-glow"></div>
+              <div class="visual-label">This Week's Champion</div>
+              <div class="champion-card" id="champion-card">
+                <p class="champion-placeholder">No champion crowned yet — the next finale decides who lifts the trophy.</p>
+              </div>
+              <div class="champion-carousel-controls" id="champion-controls" hidden>
+                <button type="button" class="carousel-btn" id="champion-prev" aria-label="Previous champion">‹</button>
+                <div class="carousel-dots" id="champion-dots"></div>
+                <button type="button" class="carousel-btn" id="champion-next" aria-label="Next champion">›</button>
+              </div>
+              <div class="visual-footer">
+                <span>Auto-fill tournament buckets</span>
+                <span>Winner reveal on completion</span>
+              </div>
+            </aside>
           </div>
 
-          <aside class="hero-visual panel champion-aside">
-            <div class="hero-glow"></div>
-            <div class="visual-label">This Week's Champion</div>
-            <div class="champion-card" id="champion-card">
-              <p class="champion-placeholder">No champion crowned yet — the next finale decides who lifts the trophy.</p>
+          <!-- How it works: 8 steps from registration to lobby code -->
+          <section class="panel home-panel how-it-works-panel">
+            <div class="home-panel-heading">
+              <p class="eyebrow accent">How It Works</p>
+              <h3>From sign-up to lobby code, in 8 quick steps.</h3>
             </div>
-            <div class="champion-carousel-controls" id="champion-controls" hidden>
-              <button type="button" class="carousel-btn" id="champion-prev" aria-label="Previous champion">‹</button>
-              <div class="carousel-dots" id="champion-dots"></div>
-              <button type="button" class="carousel-btn" id="champion-next" aria-label="Next champion">›</button>
+            <ol class="how-steps">
+              <li>
+                <span class="step-num">1</span>
+                <div>
+                  <h4>Create your account</h4>
+                  <p>Sign up with a unique username, your Indian mobile number, and a password.</p>
+                </div>
+              </li>
+              <li>
+                <span class="step-num">2</span>
+                <div>
+                  <h4>Build your squad</h4>
+                  <p>Name your team and pick the Valorant agent that represents it.</p>
+                </div>
+              </li>
+              <li>
+                <span class="step-num">3</span>
+                <div>
+                  <h4>Add players</h4>
+                  <p>Add up to 6 players with their in-game Valorant name and tag.</p>
+                </div>
+              </li>
+              <li>
+                <span class="step-num">4</span>
+                <div>
+                  <h4>Pick a tier</h4>
+                  <p>Amateur (₹250 entry, ₹1,000 prize) or Pro (₹500 entry, ₹2,000 prize).</p>
+                </div>
+              </li>
+              <li>
+                <span class="step-num">5</span>
+                <div>
+                  <h4>Pay via UPI</h4>
+                  <p>Scan our QR with any UPI app — GPay, PhonePe, Paytm — and pay your entry fee in seconds.</p>
+                </div>
+              </li>
+              <li>
+                <span class="step-num">6</span>
+                <div>
+                  <h4>Submit your UTR</h4>
+                  <p>Paste the 12-digit reference from your UPI app. We cross-check it against our bank and confirm your slot.</p>
+                </div>
+              </li>
+              <li>
+                <span class="step-num">7</span>
+                <div>
+                  <h4>Wait for the bracket to fill</h4>
+                  <p>Tournaments lock once 8 teams have paid in. Your dashboard shows your slot in real time.</p>
+                </div>
+              </li>
+              <li>
+                <span class="step-num">8</span>
+                <div>
+                  <h4>Get your party ID</h4>
+                  <p>Your Valorant custom-lobby code appears on your dashboard <strong>30 minutes before</strong> your first match. Join the lobby, play, win.</p>
+                </div>
+              </li>
+            </ol>
+          </section>
+
+          <!-- Tournament schedule: Friday evening cadence -->
+          <section class="panel home-panel schedule-panel">
+            <div class="home-panel-heading">
+              <p class="eyebrow accent">Tournament Schedule</p>
+              <h3>Friday nights, back to back.</h3>
             </div>
-            <div class="visual-footer">
-              <span>Auto-fill tournament buckets</span>
-              <span>Winner reveal on completion</span>
+            <p class="schedule-intro">
+              Tournaments lock into Friday evening slots once 8 teams have paid in.
+              Each tournament starts exactly one hour after the previous one.
+            </p>
+            <div class="schedule-grid">
+              <div class="slot-card">
+                <p class="slot-label">Tournament 1</p>
+                <strong>6:00 PM</strong>
+                <span>Friday · IST</span>
+              </div>
+              <div class="slot-card">
+                <p class="slot-label">Tournament 2</p>
+                <strong>7:00 PM</strong>
+                <span>Friday · IST</span>
+              </div>
+              <div class="slot-card">
+                <p class="slot-label">Tournament 3</p>
+                <strong>8:00 PM</strong>
+                <span>Friday · IST</span>
+              </div>
+              <div class="slot-card">
+                <p class="slot-label">Tournament 4</p>
+                <strong>9:00 PM</strong>
+                <span>Friday · IST</span>
+              </div>
             </div>
-          </aside>
+            <p class="schedule-note">
+              Your party ID (Valorant lobby code) is revealed on your dashboard
+              <strong>30 minutes before</strong> your tournament's first match —
+              so for a 6 PM tournament, the code drops at 5:30 PM. Be online.
+            </p>
+          </section>
+
+          <!-- Trust & safety: make new visitors feel okay sending money -->
+          <section class="panel home-panel trust-panel">
+            <div class="home-panel-heading">
+              <p class="eyebrow accent">Why You Can Trust Us</p>
+              <h3>Built for the community, transparent end-to-end.</h3>
+            </div>
+            <ul class="trust-grid">
+              <li>
+                <h4>✓ Verified UPI payments</h4>
+                <p>Every payment is cross-checked against our bank statement before your tournament slot is confirmed.</p>
+              </li>
+              <li>
+                <h4>✓ Refund if the bracket doesn't fill</h4>
+                <p>If your tournament doesn't fill 8 teams within 7 days of your payment, you get a full refund — no questions.</p>
+              </li>
+              <li>
+                <h4>✓ No DMs asking for money</h4>
+                <p>We will never message you outside this site asking for payment. Pay only via the QR code shown on the registration page.</p>
+              </li>
+              <li>
+                <h4>✓ Skill-based, no luck involved</h4>
+                <p>Valorant is a skill game. Prize pools come from team entries plus our own contribution — no chance, no dice.</p>
+              </li>
+              <li>
+                <h4>✓ Age and state eligibility</h4>
+                <p>18+ only. Participation is restricted in Tamil Nadu, Andhra Pradesh, Telangana, Assam, Odisha, Nagaland, and Sikkim per state law.</p>
+              </li>
+              <li>
+                <h4>✓ Direct support</h4>
+                <p>Something off? Reach us at <a href="mailto:support@valotournament.in">support@valotournament.in</a> — we reply within a day.</p>
+              </li>
+            </ul>
+          </section>
         </section>
       </header>
 

@@ -219,6 +219,35 @@ async function ensureTournamentResultColumns() {
   await pool.query("ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP");
 }
 
+// === party_id feature ====================================================
+// Drop this column + the route below to revert the feature.
+async function ensurePartyIdColumn() {
+  await pool.query("ALTER TABLE matches ADD COLUMN IF NOT EXISTS party_id TEXT");
+}
+
+// Admin action: set or clear the Valorant custom-lobby code for a match.
+// Empty/whitespace clears it. Trimmed and capped at 32 chars to keep the
+// UI tidy.
+router.post("/match/party-id", requireAdmin, async (req, res) => {
+  try {
+    const matchId = Number(req.body.match_id);
+    if (!matchId) return res.status(400).json({ error: "match_id required" });
+    const raw = String(req.body.party_id || "").trim().slice(0, 32);
+    const partyId = raw === "" ? null : raw;
+
+    await ensurePartyIdColumn();
+    const result = await pool.query(
+      "UPDATE matches SET party_id = $1 WHERE id = $2 RETURNING *",
+      [partyId, matchId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: "Match not found" });
+    res.json({ success: true, match: result.rows[0] });
+  } catch (err) {
+    console.error("Set party_id error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Admin action: Schedule a match (set scheduled_time)
 router.post("/match/schedule", requireAdmin, async (req, res) => {
   try {

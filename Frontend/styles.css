@@ -305,6 +305,166 @@ button {
   grid-template-columns: 1.2fr 0.8fr;
 }
 
+/* === Home view: stack hero + onboarding panels vertically =============== */
+.home-view {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding-bottom: 48px;
+}
+
+.home-panel {
+  padding: 32px;
+}
+
+.home-panel-heading {
+  margin-bottom: 22px;
+}
+
+.home-panel-heading h3 {
+  margin: 6px 0 0;
+  font-family: "Orbitron", sans-serif;
+  font-size: clamp(1.4rem, 2.4vw, 2rem);
+  line-height: 1.1;
+}
+
+/* --- How it works: numbered steps --- */
+.how-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.how-steps li {
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  background: rgba(20, 4, 8, 0.4);
+}
+
+.how-steps .step-num {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-family: "Orbitron", sans-serif;
+  font-weight: 700;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--stroke);
+}
+
+.how-steps h4 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.how-steps p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+/* --- Schedule grid --- */
+.schedule-intro,
+.schedule-note {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.schedule-note {
+  margin: 18px 0 0;
+}
+
+.schedule-note strong {
+  color: var(--accent);
+}
+
+.schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+}
+
+.slot-card {
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: rgba(20, 4, 8, 0.4);
+  text-align: center;
+}
+
+.slot-card .slot-label {
+  margin: 0 0 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.slot-card strong {
+  display: block;
+  font-family: "Orbitron", sans-serif;
+  font-size: 1.6rem;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.slot-card span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* --- Trust grid --- */
+.trust-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.trust-grid li {
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: rgba(20, 4, 8, 0.4);
+}
+
+.trust-grid h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--accent);
+  letter-spacing: 0.01em;
+}
+
+.trust-grid p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.trust-grid a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+}
+
 .hero-copy,
 .hero-visual,
 .lookup-panel,
@@ -1890,6 +2050,35 @@ body.is-authenticated .nav-auth-only {
   border-radius: 16px;
   background: rgba(10, 2, 4, 0.34);
   padding: 18px;
+}
+
+/* === party_id feature (remove this block to revert) =================== */
+.party-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 60, 80, 0.12);
+  border: 1px solid var(--stroke);
+}
+
+.party-badge .party-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.party-badge .party-code {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: rgba(255, 60, 80, 0.2);
+  padding: 4px 10px;
+  border-radius: 6px;
 }
 
 /* === UPI payment QR + UTR submission =================================== */

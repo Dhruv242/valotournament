@@ -21,6 +21,12 @@ const QR_VALID_MINUTES = Number(process.env.UPI_QR_VALID_MINUTES || 15);
 const AUTO_VERIFY = String(process.env.AUTO_VERIFY_PAYMENTS || "false")
   .toLowerCase() === "true";
 
+// When PAYMENTS_DISABLED=true, the entire UPI flow is skipped for testing.
+// /payments/create-order just slots the team straight into a tournament.
+// Flip back to "false" in the secret to re-enable real payments.
+const PAYMENTS_DISABLED = String(process.env.PAYMENTS_DISABLED || "false")
+  .toLowerCase() === "true";
+
 if (!RECEIVER_VPA && process.env.NODE_ENV === "production") {
   console.warn("[warn] UPI_VPA not set — /payments/create-order will fail.");
 }
@@ -111,11 +117,35 @@ router.post("/create-order", verifyJwt, requireTeamOwnership, async (req, res) =
     const amount = ENTRY_FEES[normalizedType];
     if (!amount) return res.status(400).json({ error: "Invalid tournament_type" });
 
+    await ensurePaymentColumns();
+
+    // [PAYMENTS_DISABLED testing bypass — flip env to "false" to remove]
+    // Short-circuit the QR/UTR dance and slot the team immediately. We
+    // still record a row so the admin payments tab shows what happened.
+    if (PAYMENTS_DISABLED) {
+      const tr = "TEST_" + crypto.randomBytes(4).toString("hex").toUpperCase();
+      const orderId = "ord_test_" + crypto.randomBytes(6).toString("hex");
+      await pool.query(
+        `INSERT INTO payments
+           (team_id, order_id, tr, amount, currency, status, tournament_type,
+            vpa, verified_at, completed_at, verified_by)
+         VALUES ($1, $2, $3, $4, 'INR', 'verified', $5, 'TEST_BYPASS', NOW(), NOW(), 'bypass')`,
+        [team_id, orderId, tr, amount, normalizedType]
+      );
+      const slot = await assignTeamToTournament(team_id, normalizedType);
+      return res.json({
+        bypassed: true,
+        order_id: orderId,
+        tournament_id: slot.tournament_id,
+        position: slot.position,
+        message: "Payments are disabled for testing. Team slotted immediately.",
+      });
+    }
+    // [/PAYMENTS_DISABLED]
+
     if (!RECEIVER_VPA) {
       return res.status(500).json({ error: "UPI VPA not configured on the server." });
     }
-
-    await ensurePaymentColumns();
 
     // Cancel any earlier pending orders for the same team — only one open
     // QR at a time, otherwise the admin queue fills with abandoned drafts.
