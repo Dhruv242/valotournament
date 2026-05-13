@@ -1,24 +1,24 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
+  name: val-backend-ingress
   namespace: val
-  name: val-ingress
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   ingressClassName: nginx
   tls:
-  - hosts:
-    - val.dev.ap-south-1.metaecho.com
-    secretName: val-tls
+    - hosts:
+        - api.valotournament.in
+      secretName: api-valotournament-tls
   rules:
-  - host: val.dev.ap-south-1.metaecho.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: val-backend-svc
-            port:
-              number: 3000
+    - host: api.valotournament.in
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: val-backend-svc
+                port:
+                  number: 80

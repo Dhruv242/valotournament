@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: val-backend
+  namespace: val
   labels:
     app: val-backend
 spec:
@@ -14,17 +15,41 @@ spec:
       labels:
         app: val-backend
     spec:
+      # Pod-level security defaults
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000          # `node` user in node:alpine
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      automountServiceAccountToken: false  # backend doesn't need to talk to k8s api
+
       containers:
         - name: val-backend
-          image: 219865458704.dkr.ecr.ap-south-1.amazonaws.com/devops-testing:val-v1-39
+          image: 219865458704.dkr.ecr.ap-south-1.amazonaws.com/devops-testing:val-v1-55
           imagePullPolicy: Always
+
           ports:
             - containerPort: 3000
+              name: http
 
-          # ✅ Health Checks
+          # Container-level security context — defense in depth
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+          # /tmp needs to be writable since readOnlyRootFilesystem is on
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: 3000
             initialDelaySeconds: 5
             periodSeconds: 10
@@ -38,32 +63,29 @@ spec:
             periodSeconds: 20
             failureThreshold: 3
 
-          # ✅ Resource Management (VERY IMPORTANT)
           resources:
             requests:
               cpu: "100m"
               memory: "128Mi"
             limits:
-              cpu: "300m"
-              memory: "256Mi"
+              cpu: "500m"
+              memory: "384Mi"
 
-          # ✅ Basic Env (expand later)
           env:
             - name: NODE_ENV
               value: "production"
-            - name: ADMIN_USERNAME
-              value: "skull_dk_up81"
-            - name: JWT_SECRET
-              value: "kSYmEXjemDEtUtOGZVM4jnf500nvIGZGfeM1pzveHB4aQ0233wFLj4Gx+PbOCICO"
-            - name: MAILHOG_HOST
-              value: "mailhog"
-            - name: MAILHOG_SMTP_PORT
-              value: "1025"
-            - name: MAIL_FROM
-              value: "fixtures@valrift.local"
+            - name: PORT
+              value: "3000"
+          envFrom:
+            # All secrets come from the K8s Secret — never from YAML in git
+            - secretRef:
+                name: val-backend-secrets
 
-          # ✅ Graceful shutdown
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
 
       restartPolicy: Always

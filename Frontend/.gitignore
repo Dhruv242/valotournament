@@ -1,4 +1,8 @@
-# .gitignore
-.env
-node_modules/
 .DS_Store
+node_modules
+.env
+.env.*
+.vscode
+.idea
+*.backup*
+backup_*

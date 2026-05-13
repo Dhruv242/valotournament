@@ -1,31 +1,7 @@
 const express = require("express");
 const router = express.Router();
-const jwt = require("jsonwebtoken");
 const pool = require("../db");
-
-const SECRET = process.env.JWT_SECRET || "supersecret";
-
-// Middleware to verify admin access
-function requireAdmin(req, res, next) {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  
-  if (!token) {
-    return res.status(401).json({ error: "Authentication required" });
-  }
-
-  try {
-    const decoded = jwt.verify(token, SECRET);
-    
-    if (decoded.role !== 'admin') {
-      return res.status(403).json({ error: "Admin access required" });
-    }
-
-    req.user = decoded;
-    next();
-  } catch (err) {
-    res.status(401).json({ error: "Invalid token" });
-  }
-}
+const { requireAdmin } = require("../middleware/auth");
 
 // Get all tournaments with teams and players
 router.get("/tournaments/overview", requireAdmin, async (req, res) => {
@@ -129,24 +105,87 @@ router.get("/teams/unassigned", requireAdmin, async (req, res) => {
   }
 });
 
-// Get all users
+// Get all users — phone is admin-only, never exposed in public APIs.
 router.get("/users", requireAdmin, async (req, res) => {
   try {
     const users = await pool.query(`
-      SELECT 
-        id, 
-        email, 
-        username, 
-        role, 
+      SELECT
+        id,
+        username,
+        phone,
+        role,
         created_at,
-        (SELECT COUNT(*) FROM teams WHERE owner_email = users.email) as team_count
-      FROM users 
+        (SELECT COUNT(*) FROM teams WHERE LOWER(owner_email) = LOWER(users.username))::int AS team_count
+      FROM users
       ORDER BY created_at DESC
     `);
 
     res.json(users.rows);
   } catch (err) {
     console.error("Users fetch error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin: full payments history (with team + owner context)
+router.get("/payments", requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        p.id,
+        p.team_id,
+        t.name AS team_name,
+        t.owner_email,
+        p.order_id,
+        p.tr,
+        p.submitted_utr,
+        p.amount,
+        p.currency,
+        p.status,
+        p.tournament_type,
+        p.created_at,
+        p.submitted_at,
+        p.verified_at,
+        p.verified_by,
+        p.completed_at,
+        p.rejection_reason
+      FROM payments p
+      LEFT JOIN teams t ON t.id = p.team_id
+      ORDER BY p.created_at DESC, p.id DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Admin payments error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin: pending payments queue — what the admin actually clears.
+// Includes the screenshot so they can eyeball it before checking the bank.
+router.get("/payments/pending", requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        p.id,
+        p.team_id,
+        t.name AS team_name,
+        t.owner_email,
+        p.order_id,
+        p.tr,
+        p.submitted_utr,
+        p.screenshot_data_url,
+        p.amount,
+        p.tournament_type,
+        p.created_at,
+        p.submitted_at
+      FROM payments p
+      LEFT JOIN teams t ON t.id = p.team_id
+      WHERE p.status = 'submitted'
+      ORDER BY p.submitted_at ASC, p.id ASC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Pending payments error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -175,6 +214,38 @@ router.get("/stats", requireAdmin, async (req, res) => {
   }
 });
 
+async function ensureTournamentResultColumns() {
+  await pool.query("ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS winner_team_id INTEGER");
+  await pool.query("ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP");
+}
+
+// Admin action: Schedule a match (set scheduled_time)
+router.post("/match/schedule", requireAdmin, async (req, res) => {
+  try {
+    const { match_id, scheduled_time } = req.body;
+    if (!match_id || !scheduled_time) {
+      return res.status(400).json({ error: "match_id and scheduled_time required" });
+    }
+
+    const result = await pool.query(
+      `UPDATE matches
+       SET scheduled_time = $1, is_scheduled = true
+       WHERE id = $2
+       RETURNING *`,
+      [scheduled_time, match_id]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: "Match not found" });
+    }
+
+    res.json({ success: true, message: "Match scheduled", match: result.rows[0] });
+  } catch (err) {
+    console.error("Schedule match error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Admin action: Start a match
 router.post("/match/start", requireAdmin, async (req, res) => {
   try {
@@ -185,7 +256,7 @@ router.post("/match/start", requireAdmin, async (req, res) => {
     }
 
     await pool.query(
-      `UPDATE matches SET match_status='live' WHERE id=$1`,
+      `UPDATE matches SET match_status='live', status='live' WHERE id=$1`,
       [match_id]
     );
 
@@ -196,7 +267,8 @@ router.post("/match/start", requireAdmin, async (req, res) => {
   }
 });
 
-// Admin action: Set match winner
+// Admin action: Set match winner — also advances the winner into the next round
+// and closes the tournament when the final is decided.
 router.post("/match/set-winner", requireAdmin, async (req, res) => {
   try {
     const { match_id, winner_id } = req.body;
@@ -205,9 +277,12 @@ router.post("/match/set-winner", requireAdmin, async (req, res) => {
       return res.status(400).json({ error: "match_id and winner_id required" });
     }
 
+    await ensureTournamentResultColumns();
+
+    // Mark current match completed
     const result = await pool.query(
-      `UPDATE matches 
-       SET match_status='completed', winner_id=$1 
+      `UPDATE matches
+       SET match_status='completed', status='completed', winner_id=$1
        WHERE id=$2
        RETURNING *`,
       [winner_id, match_id]
@@ -217,7 +292,63 @@ router.post("/match/set-winner", requireAdmin, async (req, res) => {
       return res.status(404).json({ error: "Match not found" });
     }
 
-    res.json({ success: true, message: "Winner set", match: result.rows[0] });
+    const completedMatch = result.rows[0];
+    const { tournament_id, round, position } = completedMatch;
+
+    // 8-team single-elim bracket advancement:
+    //   QF (round 1) pos 1 -> SF (round 2) pos 1 / team1
+    //   QF pos 2          -> SF pos 1 / team2
+    //   QF pos 3          -> SF pos 2 / team1
+    //   QF pos 4          -> SF pos 2 / team2
+    //   SF pos 1          -> Final (round 3) pos 1 / team1
+    //   SF pos 2          -> Final pos 1 / team2
+    let nextRound = null;
+    let nextPosition = null;
+    let nextSlot = null; // "team1_id" or "team2_id"
+
+    if (round === 1) {
+      nextRound = 2;
+      nextPosition = Math.ceil(position / 2);
+      nextSlot = position % 2 === 1 ? "team1_id" : "team2_id";
+    } else if (round === 2) {
+      nextRound = 3;
+      nextPosition = 1;
+      nextSlot = position === 1 ? "team1_id" : "team2_id";
+    }
+
+    let advancedMatch = null;
+    if (nextRound && nextSlot) {
+      const adv = await pool.query(
+        `UPDATE matches
+         SET ${nextSlot} = $1
+         WHERE tournament_id = $2 AND round = $3 AND position = $4
+         RETURNING *`,
+        [winner_id, tournament_id, nextRound, nextPosition]
+      );
+      advancedMatch = adv.rows[0] || null;
+    }
+
+    // If the FINAL just ended, close the tournament out
+    let tournamentClosed = false;
+    if (round === 3) {
+      await pool.query(
+        `UPDATE tournaments
+         SET status = 'completed',
+             winner_team_id = $1,
+             completed_at = NOW()
+         WHERE id = $2`,
+        [winner_id, tournament_id]
+      );
+      tournamentClosed = true;
+    }
+
+    res.json({
+      success: true,
+      message: "Winner set",
+      match: completedMatch,
+      advanced: advancedMatch,
+      tournament_completed: tournamentClosed,
+    });
   } catch (err) {
     console.error("Set winner error:", err);
     res.status(500).json({ error: err.message });

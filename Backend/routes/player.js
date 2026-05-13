@@ -1,9 +1,33 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
+const { verifyJwt, requireAdmin } = require("../middleware/auth");
+
+// Ownership guard — caller must own the team they're adding a player to
+async function requireTeamOwnership(req, res, next) {
+  try {
+    if (req.user.role === "admin") return next();
+    const teamId = req.body.team_id || req.params.teamId;
+    if (!teamId) return res.status(400).json({ error: "team_id required" });
+    const result = await pool.query(
+      "SELECT owner_email FROM teams WHERE id = $1",
+      [teamId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: "Team not found" });
+    const ownerName = String(result.rows[0].owner_email || "").toLowerCase();
+    const tokenName = String(req.user.username || "").toLowerCase();
+    if (!ownerName || ownerName !== tokenName) {
+      return res.status(403).json({ error: "Not your team" });
+    }
+    next();
+  } catch (err) {
+    console.error("Ownership check error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
 
 // ➕ Add player (VALIDATION + LIMIT + NO DUPLICATES)
-router.post("/", async (req, res) => {
+router.post("/", verifyJwt, requireTeamOwnership, async (req, res) => {
   const { team_id, name, valorant_name, tag } = req.body;
 
   // 🔥 BASIC VALIDATION
@@ -63,8 +87,8 @@ router.post("/", async (req, res) => {
   }
 });
 
-// 📄 Get ALL players
-router.get("/", async (req, res) => {
+// 📄 Get ALL players — admin only (PII enumeration risk)
+router.get("/", requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT * FROM players ORDER BY id DESC"
@@ -76,10 +100,21 @@ router.get("/", async (req, res) => {
   }
 });
 
-// 📄 Get players of a specific team
-router.get("/:teamId", async (req, res) => {
+// 📄 Get players of a specific team — must own the team or be admin
+router.get("/:teamId", verifyJwt, async (req, res) => {
   const { teamId } = req.params;
   try {
+    if (req.user.role !== "admin") {
+      const teamRow = await pool.query(
+        "SELECT owner_email FROM teams WHERE id = $1",
+        [teamId]
+      );
+      if (!teamRow.rows.length) return res.status(404).json({ error: "Team not found" });
+      const owner = String(teamRow.rows[0].owner_email || "").toLowerCase();
+      const me = String(req.user.username || "").toLowerCase();
+      if (owner !== me) return res.status(403).json({ error: "Not your team" });
+    }
+
     const result = await pool.query(
       "SELECT * FROM players WHERE team_id = $1 ORDER BY id",
       [teamId]

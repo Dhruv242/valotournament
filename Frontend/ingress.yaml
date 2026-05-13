@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: val-frontend-ingress
+  namespace: val
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - www.valotournament.in
+      secretName: www-valotournament-tls
+  rules:
+    - host: www.valotournament.in
+      http:
+        paths:
+          # /api on the frontend host is forwarded to the backend service.
+          # Keeps API calls same-origin so config.js can stay as
+          # apiBaseUrl: "/api" — no CORS preflight, no cross-host cookies.
+          # nginx-ingress matches longest prefix first, so /api wins over /.
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: val-backend-svc
+                port:
+                  number: 80
+          # Everything else is the static frontend.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: val-frontend-svc
+                port:
+                  number: 80

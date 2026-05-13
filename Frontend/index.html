@@ -43,38 +43,67 @@
               <a href="#home" data-nav="home">Home</a>
               <a href="#tiers" data-nav="tiers">Tiers</a>
               <a href="#register" data-nav="register">Register</a>
+              <a href="#my-squads" data-nav="my-squads" class="nav-auth-only">My Squads</a>
               <a href="#dashboard" data-nav="dashboard">Dashboard</a>
               <a href="#admin" data-nav="admin">Admin</a>
             </div>
             <div class="auth-menu">
               <button class="button button-secondary small" id="auth-toggle" type="button">Sign In</button>
               <div class="panel auth-dropdown hidden" id="auth-dropdown">
-                <form id="auth-form" class="stack-form compact">
+                <div class="auth-tabs" role="tablist">
+                  <button type="button" class="auth-tab active" data-auth-tab="login" role="tab" aria-selected="true">Sign In</button>
+                  <button type="button" class="auth-tab" data-auth-tab="register" role="tab" aria-selected="false">Register</button>
+                </div>
+
+                <form id="login-form" class="stack-form compact auth-panel" data-auth-panel="login">
                   <div class="form-header">
-                    <h4>Account Access</h4>
-                    <p>Use your Gmail and a unique player username.</p>
+                    <h4>Welcome back</h4>
+                    <p>Use your username and password to continue.</p>
                   </div>
                   <label>
-                    Gmail
-                    <input id="auth-email" name="auth-email" type="email" placeholder="player@gmail.com" required />
-                  </label>
-                  <label>
                     Username
-                    <input id="auth-username" name="auth-username" placeholder="neon_player" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" required />
+                    <input id="login-username" name="login-username" placeholder="neon_player" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" autocomplete="username" required />
                   </label>
                   <label>
                     Password
-                    <input id="auth-password" name="auth-password" type="password" placeholder="Create or enter password" minlength="8" required />
+                    <input id="login-password" name="login-password" type="password" placeholder="Your password" minlength="8" autocomplete="current-password" required />
                   </label>
                   <label>
                     Access Role
-                    <select id="auth-role" name="auth-role" required>
+                    <select id="login-role" name="login-role" required>
                       <option value="player">Player</option>
                       <option value="admin">Admin</option>
                     </select>
                   </label>
-                  <button class="button button-primary" type="submit">Continue With Gmail</button>
+                  <button class="button button-primary" type="submit">Sign In</button>
                   <button class="button button-secondary" id="logout-button" type="button">Sign Out</button>
+                </form>
+
+                <form id="register-form" class="stack-form compact auth-panel hidden" data-auth-panel="register">
+                  <div class="form-header">
+                    <h4>Create your account</h4>
+                    <p>Pick a unique username, add your Indian mobile number, and set a password.</p>
+                  </div>
+                  <label>
+                    Username
+                    <input id="register-username" name="register-username" placeholder="neon_player" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" autocomplete="username" required />
+                  </label>
+                  <label>
+                    Phone (India)
+                    <input id="register-phone" name="register-phone" type="tel" placeholder="98765 43210" inputmode="numeric" pattern="[6-9][0-9]{9}" autocomplete="tel-national" required />
+                  </label>
+                  <label>
+                    Password
+                    <input id="register-password" name="register-password" type="password" placeholder="At least 8 characters" minlength="8" autocomplete="new-password" required />
+                  </label>
+                  <label>
+                    Access Role
+                    <select id="register-role" name="register-role" required>
+                      <option value="player">Player</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </label>
+                  <button class="button button-primary" type="submit">Create Account</button>
                 </form>
               </div>
             </div>
@@ -86,12 +115,12 @@
             <p class="eyebrow accent">Season Queue Is Live</p>
             <h2 class="multicolor-title">Where Champions Are Crafted and Only the Exceptional Compete</h2>
             <p class="hero-text">
-              Amateur and pro squads register, pay through Razorpay, enter an 8-team pool,
+              Amateur and pro squads register, pay via UPI, enter an 8-team pool,
               and automatically roll into the next tournament once a bracket fills up.
             </p>
             <div class="hero-actions">
               <button class="button button-primary" id="hero-signin" type="button">Sign In To Register</button>
-              <a class="button button-secondary" href="#dashboard">Open Team Dashboard</a>
+              <a class="button button-secondary" href="#dashboard" data-nav="dashboard">Open Team Dashboard</a>
             </div>
             <div class="hero-stats">
               <article>
@@ -109,24 +138,16 @@
             </div>
           </div>
 
-          <aside class="hero-visual panel">
-            <div class="agent-wall" aria-hidden="true">
-              <div class="agent-card agent-jett"><span></span></div>
-              <div class="agent-card agent-reyna"><span></span></div>
-              <div class="agent-card agent-omen"><span></span></div>
-              <div class="agent-card agent-phoenix"><span></span></div>
-              <div class="agent-card agent-sage"><span></span></div>
-              <div class="agent-card agent-viper"><span></span></div>
-            </div>
+          <aside class="hero-visual panel champion-aside">
             <div class="hero-glow"></div>
-            <div class="visual-label">Valorant Agent Wall</div>
-            <div class="visual-map">
-              <div class="visual-node node-a">Alpha</div>
-              <div class="visual-node node-b">Bravo</div>
-              <div class="visual-node node-c">Charlie</div>
-              <div class="visual-node node-d">Delta</div>
-              <div class="visual-node node-e">Echo</div>
-              <div class="visual-node node-f">Foxtrot</div>
+            <div class="visual-label">This Week's Champion</div>
+            <div class="champion-card" id="champion-card">
+              <p class="champion-placeholder">No champion crowned yet — the next finale decides who lifts the trophy.</p>
+            </div>
+            <div class="champion-carousel-controls" id="champion-controls" hidden>
+              <button type="button" class="carousel-btn" id="champion-prev" aria-label="Previous champion">‹</button>
+              <div class="carousel-dots" id="champion-dots"></div>
+              <button type="button" class="carousel-btn" id="champion-next" aria-label="Next champion">›</button>
             </div>
             <div class="visual-footer">
               <span>Auto-fill tournament buckets</span>
@@ -168,39 +189,16 @@
           </div>
         </section>
 
-        <section class="section feature-band app-view active-view" data-view="home">
-          <article class="feature-card panel">
-            <p class="eyebrow">Auth</p>
-            <h4>Gmail-based access</h4>
-            <p>Players sign in with Gmail and reserve one unique username for tournament identity.</p>
-          </article>
-          <article class="feature-card panel">
-            <p class="eyebrow">Flow</p>
-            <h4>Create team</h4>
-            <p>Register a squad identity first, then add up to 6 Valorant players with Riot IDs.</p>
-          </article>
-          <article class="feature-card panel">
-            <p class="eyebrow">Payment</p>
-            <h4>Razorpay checkout</h4>
-            <p>Trigger order creation, complete payment, and verify the signature through your backend.</p>
-          </article>
-          <article class="feature-card panel">
-            <p class="eyebrow">Access</p>
-            <h4>Bracket dashboard</h4>
-            <p>Paid teams can reopen their tournament dashboard and follow waiting or running fixtures.</p>
-          </article>
-        </section>
-
         <section class="section registration-layout app-view" id="register" data-view="register">
           <div class="section-heading">
             <p class="eyebrow accent">Registration Console</p>
-            <h3>Sign in with Gmail, then build the roster and lock the slot.</h3>
+            <h3>Sign in, then build the roster and lock the slot.</h3>
           </div>
 
           <div class="panel auth-first-banner" id="auth-first-banner">
             <p class="eyebrow accent">Step 1</p>
-            <h4>Gmail sign-in before team registration.</h4>
-            <p>Players and admins must authenticate with a Gmail account first. Usernames are reserved by the backend.</p>
+            <h4>Sign in before team registration.</h4>
+            <p>Players and admins must sign in with their username and password first. New here? Create an account from the Register tab.</p>
             <button class="button button-primary" id="register-signin" type="button">Open Sign In</button>
           </div>
 
@@ -249,7 +247,7 @@
               <form id="payment-form" class="stack-form">
                 <div class="form-header">
                   <h4>3. Tournament Payment</h4>
-                  <p>Choose amateur or pro, then launch Razorpay.</p>
+                  <p>Choose amateur or pro, then scan the UPI QR and submit your UTR for verification.</p>
                 </div>
                 <label>
                   Tournament Type
@@ -258,8 +256,45 @@
                     <option value="pro">Pro - INR 500</option>
                   </select>
                 </label>
-                <button class="button button-primary" type="submit">Pay & Join Tournament</button>
+                <button class="button button-primary" type="submit">Generate Payment QR</button>
               </form>
+
+              <!-- UPI QR + UTR submission. Hidden until an order is created. -->
+              <div id="upi-payment-panel" class="upi-panel hidden">
+                <div class="form-header">
+                  <h4>Scan &amp; pay via UPI</h4>
+                  <p>Open any UPI app (GPay, PhonePe, Paytm…), scan, and pay. After paying, paste the UTR below.</p>
+                </div>
+
+                <div class="upi-qr-wrap">
+                  <img id="upi-qr-image" alt="UPI payment QR" />
+                  <noscript>QR generation requires JavaScript.</noscript>
+                  <p class="upi-meta">
+                    <span><strong>To:</strong> <span id="upi-pay-to">—</span></span>
+                    <span><strong>Amount:</strong> ₹<span id="upi-amount">0</span></span>
+                    <span><strong>Ref:</strong> <code id="upi-tr">—</code></span>
+                    <span><strong>Expires in:</strong> <span id="upi-countdown">15:00</span></span>
+                  </p>
+                  <p class="muted-text upi-help">
+                    On a mobile? Tap <a href="#" id="upi-open-app">Open in UPI app</a> to launch your default app directly.
+                  </p>
+                </div>
+
+                <form id="utr-form" class="stack-form compact">
+                  <label>
+                    UTR (12-digit transaction reference from your UPI app)
+                    <input id="utr-input" name="utr" placeholder="123456789012" minlength="10" maxlength="22" pattern="[A-Za-z0-9]{10,22}" required />
+                  </label>
+                  <label>
+                    Screenshot (optional)
+                    <input id="utr-screenshot" name="screenshot" type="file" accept="image/png,image/jpeg,image/webp" />
+                    <span class="muted-text upi-help">Optional — for our records. The UTR is the actual proof.</span>
+                  </label>
+                  <button class="button button-primary" type="submit">Submit UTR for Verification</button>
+                </form>
+
+                <p id="upi-status" class="upi-status muted-text"></p>
+              </div>
             </div>
 
             <aside class="panel registration-status">
@@ -286,6 +321,23 @@
                 <div id="activity-feed" class="activity-feed"></div>
               </div>
             </aside>
+          </div>
+        </section>
+
+        <section class="section my-squads-layout app-view" id="my-squads" data-view="my-squads">
+          <div class="section-heading">
+            <p class="eyebrow accent">My Squads</p>
+            <h3 id="my-squads-heading">Your registered teams and rosters.</h3>
+            <p id="my-squads-counter" class="muted">Loading your squads…</p>
+          </div>
+
+          <div class="my-squads-actions">
+            <button class="button button-primary" id="my-squads-new" type="button">+ Register New Squad</button>
+            <button class="button button-secondary" id="my-squads-refresh" type="button">Refresh</button>
+          </div>
+
+          <div class="my-squads-grid" id="my-squads-grid">
+            <p class="my-squads-empty">No teams registered yet. Use Register to create your first squad.</p>
           </div>
         </section>
 
@@ -367,6 +419,16 @@
             </div>
           </div>
 
+          <div class="panel admin-pending-panel">
+            <div class="admin-panel-header">
+              <h4>Pending Payment Verifications</h4>
+              <button class="button button-secondary small" id="refresh-pending-payments">Refresh</button>
+            </div>
+            <div id="admin-pending-payments" class="admin-list">
+              <p class="muted-text">Loading…</p>
+            </div>
+          </div>
+
           <div class="admin-grid">
             <div class="panel admin-tournaments">
               <div class="admin-panel-header">
@@ -384,11 +446,20 @@
               <div id="admin-unassigned-list" class="admin-list"></div>
             </div>
           </div>
+
+          <div class="panel admin-payments-panel">
+            <div class="admin-panel-header">
+              <h4>Payment History</h4>
+              <button class="button button-secondary small" id="refresh-payments">Refresh</button>
+            </div>
+            <div id="admin-payments-list" class="admin-list">
+              <p class="muted-text">Loading payments…</p>
+            </div>
+          </div>
         </section>
       </main>
     </div>
 
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <script src="./config.js"></script>
     <script src="./app.js"></script>
   </body>

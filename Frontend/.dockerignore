@@ -1,0 +1,15 @@
+# Keep the image small and free of secrets/backups
+.git
+.gitignore
+.DS_Store
+.env
+.env.*
+*.md
+README*
+*.backup*
+backup_*
+Dockerfile
+.dockerignore
+*.yaml
+*.yml
+node_modules

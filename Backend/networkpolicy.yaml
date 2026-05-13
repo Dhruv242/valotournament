@@ -1,0 +1,76 @@
+# Locks Postgres ingress so ONLY val-backend pods can connect on 5432.
+# Prevents any other compromised pod in the cluster from talking to the DB.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-allow-backend-only
+  namespace: val
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: val-backend
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# Default-deny ingress for the namespace (everything must explicitly allow).
+# Comment this out if you're not ready to fully lock down east-west traffic.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: val
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# Allow the ingress controller -> val-backend on port 3000
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-backend
+  namespace: val
+spec:
+  podSelector:
+    matchLabels:
+      app: val-backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # Adjust to match your ingress controller namespace/labels
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000
+---
+# Allow the ingress controller -> val-frontend on port 80
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-frontend
+  namespace: val
+spec:
+  podSelector:
+    matchLabels:
+      app: val-frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 80

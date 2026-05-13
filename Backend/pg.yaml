@@ -14,25 +14,56 @@ spec:
       labels:
         app: postgres
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999       # postgres image's default uid
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+
       containers:
         - name: postgres
           image: postgres:15
           ports:
             - containerPort: 5432
+              name: postgres
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
 
           env:
             - name: POSTGRES_DB
-              value: val
+              valueFrom:
+                secretKeyRef:
+                  name: val-backend-secrets
+                  key: DB_NAME
             - name: POSTGRES_USER
-              value: val_dk
+              valueFrom:
+                secretKeyRef:
+                  name: val-backend-secrets
+                  key: DB_USER
             - name: POSTGRES_PASSWORD
-              value: Val@123#321
+              valueFrom:
+                secretKeyRef:
+                  name: val-backend-secrets
+                  key: DB_PASSWORD
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
 
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
 
   volumeClaimTemplates:
     - metadata:

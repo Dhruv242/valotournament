@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: val-frontend
+  namespace: val
+  labels:
+    app: val-frontend
+spec:
+  replicas: 2                        # static site — cheap to run a couple replicas for HA
+  selector:
+    matchLabels:
+      app: val-frontend
+  template:
+    metadata:
+      labels:
+        app: val-frontend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101                # nginx unprivileged image uid
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+
+      automountServiceAccountToken: false
+
+      containers:
+        - name: val-frontend
+          # Push to your ECR (same registry pattern as the backend).
+          # Build:  docker build -t <ecr>/val-frontend:<tag> .
+          # Push:   docker push  <ecr>/val-frontend:<tag>
+          image: 219865458704.dkr.ecr.ap-south-1.amazonaws.com/devops-testing:val-frontend-v1
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8080
+              name: http
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+          # /var/cache/nginx and /var/run need to be writable
+          volumeMounts:
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+            - name: tmp
+              mountPath: /tmp
+
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "20m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+
+      volumes:
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+
+      restartPolicy: Always

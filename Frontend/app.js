@@ -6,7 +6,7 @@
 
   const state = {
     auth: {
-      email: "",
+      userId: null,
       username: "",
       role: "player",
       token: "",
@@ -30,17 +30,23 @@
     registrationGrid: document.getElementById("registration-grid"),
     authToggle: document.getElementById("auth-toggle"),
     authDropdown: document.getElementById("auth-dropdown"),
-    authForm: document.getElementById("auth-form"),
+    authTabs: document.querySelectorAll(".auth-tab"),
+    authPanels: document.querySelectorAll(".auth-panel"),
+    loginForm: document.getElementById("login-form"),
+    registerForm: document.getElementById("register-form"),
     logoutButton: document.getElementById("logout-button"),
     teamForm: document.getElementById("team-form"),
     playerForm: document.getElementById("player-form"),
     paymentForm: document.getElementById("payment-form"),
     lookupForm: document.getElementById("lookup-form"),
     refreshDashboard: document.getElementById("refresh-dashboard"),
-    authEmail: document.getElementById("auth-email"),
-    authUsername: document.getElementById("auth-username"),
-    authPassword: document.getElementById("auth-password"),
-    authRole: document.getElementById("auth-role"),
+    loginUsername: document.getElementById("login-username"),
+    loginPassword: document.getElementById("login-password"),
+    loginRole: document.getElementById("login-role"),
+    registerUsername: document.getElementById("register-username"),
+    registerPhone: document.getElementById("register-phone"),
+    registerPassword: document.getElementById("register-password"),
+    registerRole: document.getElementById("register-role"),
     authStatusName: document.getElementById("auth-status-name"),
     authStatusRole: document.getElementById("auth-status-role"),
     authCapabilities: document.getElementById("auth-capabilities"),
@@ -59,30 +65,53 @@
     fixtureList: document.getElementById("fixture-list"),
     agentPicker: document.getElementById("agent-picker"),
     teamAgentId: document.getElementById("team-agent-id"),
+    mySquadsGrid: document.getElementById("my-squads-grid"),
+    mySquadsCounter: document.getElementById("my-squads-counter"),
+    mySquadsNew: document.getElementById("my-squads-new"),
+    mySquadsRefresh: document.getElementById("my-squads-refresh"),
   };
 
-  function openAuthDropdown() {
+  const MAX_TEAMS_PER_OWNER = 5;
+
+  function openAuthDropdown(tab) {
     elements.authDropdown.classList.remove("hidden");
-    elements.authEmail.focus();
-    
+    switchAuthTab(tab || "login");
+
     // Add visual pulse to highlight the dropdown location
     elements.authToggle.style.animation = "pulse 0.5s ease-in-out 2";
     setTimeout(() => {
       elements.authToggle.style.animation = "";
     }, 1000);
-    
+
     showToast("Sign In Form", "Auth form opened in top-right corner ↗️");
   }
 
+  function switchAuthTab(tab) {
+    const target = tab === "register" ? "register" : "login";
+    elements.authTabs.forEach(function (btn) {
+      const isActive = btn.getAttribute("data-auth-tab") === target;
+      btn.classList.toggle("active", isActive);
+      btn.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+    elements.authPanels.forEach(function (panel) {
+      panel.classList.toggle("hidden", panel.getAttribute("data-auth-panel") !== target);
+    });
+    const focusEl = target === "register" ? elements.registerUsername : elements.loginUsername;
+    if (focusEl) {
+      try { focusEl.focus(); } catch (e) {}
+    }
+  }
+
   function setView(viewName) {
-    // Admin access control
+    // Admin access control — toggle body class; the CSS rule does the rest.
+    // Wipes any prior inline display:'block' that earlier versions may have set.
     const adminLink = document.querySelector('[data-nav="admin"]');
-    if (adminLink) {
-      if (state.auth.isAuthenticated && state.auth.role === 'admin') {
-        adminLink.style.display = 'block';
-      } else {
-        adminLink.style.display = 'none';
-      }
+    if (adminLink) adminLink.style.display = '';
+    document.body.classList.toggle('is-authenticated', !!state.auth.isAuthenticated);
+    if (state.auth.isAuthenticated && state.auth.role === 'admin') {
+      document.body.classList.add('is-admin');
+    } else {
+      document.body.classList.remove('is-admin');
     }
 
     // Restrict admin view access
@@ -105,6 +134,11 @@
     if (nextView === 'admin' && state.auth.role === 'admin') {
       loadAdminDashboard();
     }
+
+    // Refresh My Squads whenever we enter that view
+    if (nextView === 'my-squads' && state.auth.isAuthenticated) {
+      loadMySquads();
+    }
   }
 
   function saveSession() {
@@ -122,7 +156,6 @@
       const saved = JSON.parse(window.localStorage.getItem(storageKey) || "null");
       if (!saved) return;
       state.auth = {
-        email: saved.auth && saved.auth.email ? saved.auth.email : "",
         userId: saved.auth && saved.auth.userId ? saved.auth.userId : null,
         username: saved.auth && saved.auth.username ? saved.auth.username : "",
         role: saved.auth && saved.auth.role ? saved.auth.role : "player",
@@ -190,11 +223,14 @@
   function renderAuthState() {
     if (!state.auth.isAuthenticated) {
       elements.authStatusName.textContent = "Guest";
-      elements.authStatusRole.textContent = "Gmail login required for protected screens.";
-      elements.authEmail.value = "";
-      elements.authUsername.value = "";
-      elements.authPassword.value = "";
-      elements.authRole.value = "player";
+      elements.authStatusRole.textContent = "Sign in to unlock registration and dashboards.";
+      if (elements.loginUsername) elements.loginUsername.value = "";
+      if (elements.loginPassword) elements.loginPassword.value = "";
+      if (elements.loginRole) elements.loginRole.value = "player";
+      if (elements.registerUsername) elements.registerUsername.value = "";
+      if (elements.registerPhone) elements.registerPhone.value = "";
+      if (elements.registerPassword) elements.registerPassword.value = "";
+      if (elements.registerRole) elements.registerRole.value = "player";
       elements.authCapabilities.innerHTML =
         "<li>Guest mode has no registration or dashboard access.</li>";
       elements.activityCard.classList.remove("hidden");
@@ -210,24 +246,20 @@
       state.auth.role === "admin"
         ? "Admin access enabled. Full operational visibility unlocked."
         : "Player access enabled. Activity feed is hidden from team members.";
-    if (state.auth.email) {
-      elements.authStatusRole.textContent += " " + state.auth.email;
-    }
-    elements.authEmail.value = state.auth.email || "";
-    elements.authUsername.value = state.auth.username;
-    elements.authPassword.value = "";
-    elements.authRole.value = state.auth.role;
+    if (elements.loginUsername) elements.loginUsername.value = state.auth.username;
+    if (elements.loginPassword) elements.loginPassword.value = "";
+    if (elements.loginRole) elements.loginRole.value = state.auth.role;
 
     const capabilities = isAdmin()
       ? [
           "View registration activity and admin-facing session events.",
           "Create teams, add players, launch payments, and inspect tournament dashboards.",
-          "Use the same Gmail token flow as players, with expanded UI visibility.",
+          "Manage users, payments, and tournament fixtures from the admin console.",
         ]
       : [
           "Create teams, add players, pay tournament entry, and open the bracket dashboard.",
           "Activity feed is hidden to keep player view limited to team operations.",
-          "Your username stays locked to your Gmail account.",
+          "Your username is locked to your account — choose carefully at registration.",
         ];
 
     elements.authCapabilities.innerHTML = capabilities
@@ -277,10 +309,14 @@
 
     elements.rosterList.innerHTML = state.roster
       .map(function mapPlayer(player, index) {
-        const riotId = [player.valorant_name, player.tag].filter(Boolean).join("#");
+        // Backend rows use full_name / valorant_tag; live add responses may also
+        // carry name / tag. Support both so re-logged-in users see their roster.
+        const displayName = player.name || player.full_name || player.valorant_name || "Unnamed";
+        const tag = player.tag || player.valorant_tag || "";
+        const riotId = [player.valorant_name, tag].filter(Boolean).join("#");
         return (
           "<li><span>" +
-          escapeHtml((index + 1) + ". " + (player.name || player.valorant_name)) +
+          escapeHtml((index + 1) + ". " + displayName) +
           "</span><span>" +
           escapeHtml(riotId) +
           "</span></li>"
@@ -289,94 +325,170 @@
       .join("");
   }
 
-  async function login(event) {
+  // Shared post-auth handler used by both login + register flows.
+  async function applyAuthPayload(payload, fallbackRole) {
+    const user = (payload && payload.user) || {};
+    const username = user.username || "";
+    const role = user.role || fallbackRole || "player";
+
+    const sameUser =
+      state.auth.isAuthenticated &&
+      state.auth.username === username &&
+      state.auth.role === role;
+
+    state.auth = {
+      userId: user.id || null,
+      username: username,
+      role: role,
+      token: payload && payload.token ? payload.token : "",
+      isAuthenticated: true,
+    };
+
+    if (!sameUser) {
+      state.team = null;
+      state.roster = [];
+      state.dashboard = null;
+    }
+
+    await restoreUserTeam();
+
+    saveSession();
+    renderSession();
+    if (!sameUser && !state.team) {
+      initEmptyDashboard();
+    }
+    elements.authDropdown.classList.add("hidden");
+
+    if (role === "admin") {
+      pushActivity("Admin authenticated", username + " is now monitoring the tournament console.");
+      setView("admin");
+    } else if (state.team) {
+      setView("my-squads");
+    } else {
+      setView("tiers");
+    }
+  }
+
+  async function loginUser(event) {
     event.preventDefault();
 
-    const username = elements.authUsername.value.trim();
-    const email = elements.authEmail.value.trim().toLowerCase();
-    const password = elements.authPassword.value;
-    const role = elements.authRole.value;
-
-    if (!email || !email.endsWith("@gmail.com")) {
-      showToast("Gmail required", "Use a valid @gmail.com address before signing in.");
-      return;
-    }
-
-    if (!username) {
-      showToast("Username required", "Enter a username before signing in.");
-      return;
-    }
+    const username = elements.loginUsername.value.trim();
+    const password = elements.loginPassword.value;
+    const role = elements.loginRole.value;
 
     if (!/^[A-Za-z0-9_]{3,24}$/.test(username)) {
-      showToast("Username unavailable", "Use 3-24 letters, numbers, or underscores.");
+      showToast("Invalid username", "Use 3-24 letters, numbers, or underscores.");
       return;
     }
-
     if (!password || password.length < 8) {
-      showToast("Password required", "Use at least 8 characters for your account password.");
+      showToast("Password required", "Use at least 8 characters.");
       return;
     }
-
     if (role === "admin" && !isConfiguredAdminUsername(username)) {
       showToast("Admin access denied", "Only the configured owner username can sign in as admin.");
-      elements.authRole.value = "player";
+      elements.loginRole.value = "player";
       return;
     }
 
     try {
       const payload = await apiRequest("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email: email, username: username, password: password, role: role }),
+        body: JSON.stringify({ username: username, password: password, role: role }),
       });
-
-      const sameUser =
-        state.auth.isAuthenticated &&
-        state.auth.email === email &&
-        state.auth.username === username &&
-        state.auth.role === role;
-
-      state.auth = {
-        email: payload.user && payload.user.email ? payload.user.email : email,
-        userId: payload.user && payload.user.id ? payload.user.id : null,
-        username: username,
-        role: payload.user && payload.user.role ? payload.user.role : role,
-        token: payload.token || "",
-        isAuthenticated: true,
-      };
-
-      if (!sameUser) {
-        state.team = null;
-        state.roster = [];
-        state.dashboard = null;
-      }
-
-      saveSession();
-      renderSession();
-      if (!sameUser) {
-        initEmptyDashboard();
-      }
-      elements.authDropdown.classList.add("hidden");
-      pushActivity(
-        "Admin authenticated",
-        username + " is now monitoring the tournament console."
-      );
-      showToast("Signed in", username + " logged in with Gmail.");
-      
-      // Redirect based on role
-      if (state.auth.role === 'admin') {
-        setView("admin");
-      } else {
-        setView("tiers");
-      }
+      await applyAuthPayload(payload, role);
+      showToast("Signed in", username + " is logged in.");
     } catch (error) {
       showToast("Login failed", error.message);
+    }
+  }
+
+  async function registerUser(event) {
+    event.preventDefault();
+
+    const username = elements.registerUsername.value.trim();
+    const phoneRaw = elements.registerPhone.value;
+    const password = elements.registerPassword.value;
+    const role = elements.registerRole.value;
+
+    if (!/^[A-Za-z0-9_]{3,24}$/.test(username)) {
+      showToast("Invalid username", "Use 3-24 letters, numbers, or underscores.");
+      return;
+    }
+    const phone = normalizeIndianPhone(phoneRaw);
+    if (!/^[6-9]\d{9}$/.test(phone)) {
+      showToast("Invalid phone", "Enter a 10-digit Indian mobile number (starts with 6-9).");
+      return;
+    }
+    if (!password || password.length < 8) {
+      showToast("Password too short", "Use at least 8 characters.");
+      return;
+    }
+    if (role === "admin" && !isConfiguredAdminUsername(username)) {
+      showToast("Admin access denied", "Only the configured owner username can register as admin.");
+      elements.registerRole.value = "player";
+      return;
+    }
+
+    try {
+      const payload = await apiRequest("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ username: username, phone: phone, password: password, role: role }),
+      });
+      await applyAuthPayload(payload, role);
+      showToast("Account created", "Welcome, " + username + "!");
+    } catch (error) {
+      showToast("Registration failed", error.message);
+    }
+  }
+
+  function normalizeIndianPhone(input) {
+    let p = String(input || "").trim().replace(/[^\d+]/g, "");
+    if (p.startsWith("+91")) p = p.slice(3);
+    else if (p.startsWith("91") && p.length === 12) p = p.slice(2);
+    else if (p.startsWith("0") && p.length === 11) p = p.slice(1);
+    return p;
+  }
+
+  async function restoreUserTeam() {
+    if (!state.auth.username) return;
+    try {
+      const teams = await apiRequest("/teams/mine", {
+        method: "GET",
+        headers: {
+          "X-User-Username": state.auth.username,
+          "X-User-Id": state.auth.userId || "",
+        },
+      });
+      if (!Array.isArray(teams) || teams.length === 0) {
+        return;
+      }
+      // Pick the most recent team for this owner
+      state.team = teams[0];
+
+      // Restore roster
+      try {
+        const roster = await apiRequest("/players/" + state.team.id);
+        state.roster = Array.isArray(roster) ? roster : [];
+      } catch (rosterErr) {
+        state.roster = [];
+      }
+
+      // If the team is already in a tournament, pre-select that queue
+      if (state.team.tournament_id) {
+        // We don't know amateur vs pro from the team row alone; loadDashboard
+        // will resolve it from the tournament record returned by /tournaments/:id
+        state.selectedType = state.selectedType || "amateur";
+      }
+    } catch (err) {
+      // Quietly ignore — user just won't have their team auto-restored
+      console.warn("Could not restore user team", err);
     }
   }
 
   function logout() {
     const previousName = state.auth.username || "User";
     state.auth = {
-      email: "",
+      userId: null,
       username: "",
       role: "player",
       token: "",
@@ -389,6 +501,8 @@
     renderSession();
     initEmptyDashboard();
     elements.authDropdown.classList.add("hidden");
+    // If the user was on a privileged view, kick them back to home
+    setView("home");
     showToast("Signed out", previousName + " has been logged out.");
   }
 
@@ -445,7 +559,7 @@
         method: "POST",
         body: JSON.stringify({ name: name, agent_id: state.selectedAgentId }),
         headers: {
-          "X-User-Email": state.auth.email,
+          "X-User-Username": state.auth.username,
           "X-User-Id": state.auth.userId || "",
         },
       });
@@ -456,6 +570,16 @@
       pushActivity("Team created", team.name + " is ready for roster registration.");
       showToast("Team created", "Your backend returned team ID #" + team.id + ".");
       elements.teamForm.reset();
+      // Reset the agent selection so the next squad starts fresh
+      state.selectedAgentId = null;
+      if (elements.teamAgentId) elements.teamAgentId.value = "";
+      if (elements.agentPicker) {
+        elements.agentPicker.querySelectorAll(".agent-option.selected").forEach(function clear(b) {
+          b.classList.remove("selected");
+        });
+      }
+      // Refresh the My Squads list silently (in case user navigates there next)
+      loadMySquads();
     } catch (error) {
       showToast("Team creation failed", error.message);
     }
@@ -496,23 +620,49 @@
     }
   }
 
+  // === UPI QR + UTR verification ===========================================
+  let upiState = {
+    orderId: null,
+    tr: null,
+    qrUri: null,
+    amount: 0,
+    validUntil: null,
+    countdownTimer: null,
+  };
+
+  function fmtMinSec(ms) {
+    if (ms <= 0) return "00:00";
+    const total = Math.floor(ms / 1000);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+  }
+
+  function clearUpiCountdown() {
+    if (upiState.countdownTimer) {
+      clearInterval(upiState.countdownTimer);
+      upiState.countdownTimer = null;
+    }
+  }
+
+  function renderUpiCountdown() {
+    const el = document.getElementById("upi-countdown");
+    if (!el || !upiState.validUntil) return;
+    const remaining = upiState.validUntil - Date.now();
+    el.textContent = fmtMinSec(remaining);
+    if (remaining <= 0) {
+      clearUpiCountdown();
+      el.textContent = "Expired";
+      const status = document.getElementById("upi-status");
+      if (status) status.textContent = "This QR has expired — generate a new one.";
+    }
+  }
+
   async function startPayment(event) {
     event.preventDefault();
-
-    if (!requireAuth()) {
-      return;
-    }
-
+    if (!requireAuth()) return;
     if (!state.team) {
       showToast("Create a team first", "Payment requires a team record.");
-      return;
-    }
-
-    if (!config.razorpayKeyId || config.razorpayKeyId === "RAZORPAY_PUBLIC_KEY_HERE") {
-      showToast(
-        "Razorpay key missing",
-        "Update config.js with your Razorpay public key before launching checkout."
-      );
       return;
     }
 
@@ -525,62 +675,114 @@
         body: JSON.stringify({
           team_id: state.team.id,
           tournament_type: state.selectedType,
-          amount: state.selectedType === "amateur" ? 250 : 500,
         }),
       });
 
-      // Capture order_id before opening Razorpay
-      const orderId = order.id;
-
-      const razorpay = new window.Razorpay({
-        key: config.razorpayKeyId,
+      upiState = {
+        orderId: order.order_id,
+        tr: order.tr,
+        qrUri: order.qr_uri,
         amount: order.amount,
-        currency: order.currency,
-        name: config.appName || "VALRIFT Champions",
-        description: state.selectedType === "pro" ? "Pro Queue Entry" : "Amateur Queue Entry",
-        order_id: orderId,
-        theme: {
-          color: "#2bd2ff",
-        },
-        handler: async function onPaymentSuccess(response) {
-          try {
-            await apiRequest("/payments/verify-payment", {
-              method: "POST",
-              body: JSON.stringify({
-                razorpay_order_id: orderId,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                team_id: state.team.id,
-                tournament_type: state.selectedType,
-              }),
-            });
-            pushActivity(
-              "Payment verified",
-              state.team.name + " entered the " + state.selectedType + " tournament queue."
-            );
-            showToast("Payment verified", "You can now open the team dashboard.");
-            await loadDashboard(state.team.id, state.selectedType);
-            setView("dashboard");
-          } catch (error) {
-            showToast("Verification failed", error.message);
-          }
-        },
-        prefill: {
-          name: state.team.name,
-        },
-      });
+        validUntil: new Date(order.valid_until).getTime(),
+        countdownTimer: null,
+      };
 
-      razorpay.on("payment.failed", function onPaymentFailed(response) {
-        const reason =
-          response && response.error && response.error.description
-            ? response.error.description
-            : "Payment was not completed.";
-        showToast("Payment failed", reason);
-      });
+      // QR is generated server-side and shipped as a PNG data URL.
+      // No CDN/CSP dependency.
+      const img = document.getElementById("upi-qr-image");
+      if (img && order.qr_data_url) {
+        img.src = order.qr_data_url;
+      }
 
-      razorpay.open();
+      document.getElementById("upi-pay-to").textContent =
+        order.receiver_name + " · " + order.vpa;
+      document.getElementById("upi-amount").textContent = String(order.amount);
+      document.getElementById("upi-tr").textContent = order.tr;
+      const openLink = document.getElementById("upi-open-app");
+      if (openLink) openLink.setAttribute("href", order.qr_uri);
+
+      const panel = document.getElementById("upi-payment-panel");
+      if (panel) panel.classList.remove("hidden");
+      const status = document.getElementById("upi-status");
+      if (status) status.textContent = "";
+
+      // Reset UTR form
+      const utrInput = document.getElementById("utr-input");
+      const ssInput = document.getElementById("utr-screenshot");
+      if (utrInput) utrInput.value = "";
+      if (ssInput) ssInput.value = "";
+
+      clearUpiCountdown();
+      renderUpiCountdown();
+      upiState.countdownTimer = setInterval(renderUpiCountdown, 1000);
+
+      showToast("QR ready", "Scan with any UPI app, then paste the UTR below.");
     } catch (error) {
-      showToast("Checkout failed", error.message);
+      showToast("Could not create order", error.message);
+    }
+  }
+
+  // Read a File into a base64 data URL. Returns null if no file.
+  function fileToDataUrl(file) {
+    return new Promise(function (resolve, reject) {
+      if (!file) return resolve(null);
+      const reader = new FileReader();
+      reader.onload = function () { resolve(reader.result); };
+      reader.onerror = function () { reject(new Error("Could not read file")); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function submitUtr(event) {
+    event.preventDefault();
+    if (!upiState.orderId) {
+      showToast("No active order", "Generate a payment QR first.");
+      return;
+    }
+    const utr = document.getElementById("utr-input").value.trim().replace(/\s+/g, "");
+    if (!/^[A-Za-z0-9]{10,22}$/.test(utr)) {
+      showToast("UTR looks wrong", "Paste the 12-digit reference from your UPI app.");
+      return;
+    }
+    const ssEl = document.getElementById("utr-screenshot");
+    const file = ssEl && ssEl.files && ssEl.files[0] ? ssEl.files[0] : null;
+    if (file && file.size > 400 * 1024) {
+      showToast("Screenshot too big", "Compress it under 400 KB or skip it — UTR is the proof.");
+      return;
+    }
+
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const result = await apiRequest("/payments/submit-utr", {
+        method: "POST",
+        body: JSON.stringify({
+          order_id: upiState.orderId,
+          utr: utr,
+          screenshot_data_url: dataUrl,
+        }),
+      });
+      clearUpiCountdown();
+      const status = document.getElementById("upi-status");
+
+      if (result && result.status === "verified") {
+        // Auto-verify mode — team is already slotted.
+        if (status) status.textContent = "Verified. Team slotted into the tournament.";
+        showToast("Payment verified", "You're in the queue.");
+        pushActivity("Payment auto-verified", state.team.name + " entered the " + state.selectedType + " queue.");
+        try {
+          await loadDashboard(state.team.id, state.selectedType);
+          setView("dashboard");
+        } catch (e) { /* dashboard load is best-effort */ }
+      } else {
+        if (status) {
+          status.textContent =
+            "Submitted. An admin will verify within a few minutes and you'll be slotted in automatically.";
+        }
+        showToast("UTR submitted", "Waiting for admin verification.");
+        pushActivity("Payment submitted", state.team.name + " submitted UTR " + utr);
+      }
+    } catch (error) {
+      showToast("Submission failed", error.message);
     }
   }
 
@@ -823,11 +1025,27 @@
       openAuthDropdown();
     });
 
-    elements.navLinks.forEach(function bindNav(link) {
+    // Re-query nav links because some live inside the hero (added after initial elements snapshot)
+    document.querySelectorAll("[data-nav]").forEach(function bindNav(link) {
       link.addEventListener("click", function onNavClick(event) {
         event.preventDefault();
-        setView(link.getAttribute("data-nav"));
+        const target = link.getAttribute("data-nav");
+        setView(target);
+
+        // If they jump to dashboard with a known team, auto-load it
+        if (target === "dashboard" && state.team && state.team.id) {
+          loadDashboard(state.team.id, state.selectedType);
+        }
       });
+    });
+
+    // Safety net — any hash change (e.g. back/forward, direct link) routes through setView
+    window.addEventListener("hashchange", function onHashChange() {
+      const next = (window.location.hash || "#home").replace("#", "") || "home";
+      setView(next);
+      if (next === "dashboard" && state.team && state.team.id) {
+        loadDashboard(state.team.id, state.selectedType);
+      }
     });
 
     // Top-right auth toggle button
@@ -835,17 +1053,46 @@
       event.stopPropagation(); // Prevent immediate closing
       elements.authDropdown.classList.toggle("hidden");
       if (!elements.authDropdown.classList.contains("hidden")) {
-        elements.authEmail.focus();
+        switchAuthTab("login");
       }
     });
 
-    elements.authForm.addEventListener("submit", login);
+    elements.authTabs.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        switchAuthTab(btn.getAttribute("data-auth-tab"));
+      });
+    });
+
+    elements.loginForm.addEventListener("submit", loginUser);
+    elements.registerForm.addEventListener("submit", registerUser);
     elements.logoutButton.addEventListener("click", logout);
     elements.teamForm.addEventListener("submit", createTeam);
     elements.playerForm.addEventListener("submit", addPlayer);
     elements.paymentForm.addEventListener("submit", startPayment);
+    const utrForm = document.getElementById("utr-form");
+    if (utrForm) utrForm.addEventListener("submit", submitUtr);
     elements.lookupForm.addEventListener("submit", handleLookup);
     
+    if (elements.mySquadsNew) {
+      elements.mySquadsNew.addEventListener("click", function onNewSquad() {
+        if (elements.mySquadsNew.disabled) return;
+        // Clear any active team so the register flow creates a fresh one
+        state.team = null;
+        state.roster = [];
+        state.selectedAgentId = null;
+        if (elements.teamAgentId) elements.teamAgentId.value = "";
+        saveSession();
+        renderSession();
+        setView("register");
+      });
+    }
+
+    if (elements.mySquadsRefresh) {
+      elements.mySquadsRefresh.addEventListener("click", function onRefreshSquads() {
+        loadMySquads();
+      });
+    }
+
     elements.refreshDashboard.addEventListener("click", function refresh() {
       if (state.dashboard) {
         loadDashboard(state.dashboard.teamId, state.dashboard.type);
@@ -865,6 +1112,42 @@
       });
     }
 
+    const refreshPayments = document.getElementById('refresh-payments');
+    if (refreshPayments) {
+      refreshPayments.addEventListener("click", function () {
+        apiRequest("/admin/payments")
+          .then(function (rows) { renderAdminPayments(rows || []); })
+          .catch(function (err) { showToast("Payments load failed", err.message); });
+      });
+    }
+
+    const refreshPending = document.getElementById('refresh-pending-payments');
+    if (refreshPending) {
+      refreshPending.addEventListener("click", loadPendingPayments);
+    }
+
+    // Champion carousel prev/next
+    const champPrev = document.getElementById('champion-prev');
+    const champNext = document.getElementById('champion-next');
+    if (champPrev) {
+      champPrev.addEventListener('click', function () {
+        if (!championCarousel.list.length) return;
+        const total = championCarousel.list.length;
+        championCarousel.index = (championCarousel.index - 1 + total) % total;
+        renderChampionSlide();
+        restartChampionAutoRotate();
+      });
+    }
+    if (champNext) {
+      champNext.addEventListener('click', function () {
+        if (!championCarousel.list.length) return;
+        championCarousel.index =
+          (championCarousel.index + 1) % championCarousel.list.length;
+        renderChampionSlide();
+        restartChampionAutoRotate();
+      });
+    }
+
     elements.tournamentType.addEventListener("change", function onTypeChange(event) {
       state.selectedType = event.target.value;
       elements.lookupType.value = state.selectedType;
@@ -877,11 +1160,16 @@
       saveSession();
     });
 
-    elements.authUsername.addEventListener("input", function onUsernameInput(event) {
-      if (!isConfiguredAdminUsername(event.target.value) && elements.authRole.value === "admin") {
-        elements.authRole.value = "player";
-      }
-    });
+    function bindAdminGuard(usernameEl, roleEl) {
+      if (!usernameEl || !roleEl) return;
+      usernameEl.addEventListener("input", function () {
+        if (!isConfiguredAdminUsername(usernameEl.value) && roleEl.value === "admin") {
+          roleEl.value = "player";
+        }
+      });
+    }
+    bindAdminGuard(elements.loginUsername, elements.loginRole);
+    bindAdminGuard(elements.registerUsername, elements.registerRole);
 
     elements.tierPicks.forEach(function bindTierButton(button) {
       button.addEventListener("click", function onClick(event) {
@@ -940,17 +1228,191 @@
     }
 
     try {
-      const [stats, tournaments, unassignedTeams] = await Promise.all([
+      const [stats, tournaments, unassignedTeams, payments, pending] = await Promise.all([
         apiRequest("/admin/stats"),
         apiRequest("/admin/tournaments/overview"),
         apiRequest("/admin/teams/unassigned"),
+        apiRequest("/admin/payments").catch(function () { return []; }),
+        apiRequest("/admin/payments/pending").catch(function () { return []; }),
       ]);
 
       renderAdminDashboard(stats, tournaments, unassignedTeams);
+      renderAdminPayments(payments);
+      renderPendingPayments(pending);
       pushActivity("Admin dashboard loaded", "Overview refreshed successfully.");
     } catch (error) {
       showToast("Admin load failed", error.message);
     }
+  }
+
+  async function loadPendingPayments() {
+    try {
+      const rows = await apiRequest("/admin/payments/pending");
+      renderPendingPayments(rows || []);
+    } catch (err) {
+      showToast("Pending load failed", err.message);
+    }
+  }
+
+  function renderPendingPayments(rows) {
+    const container = document.getElementById("admin-pending-payments");
+    if (!container) return;
+    if (!Array.isArray(rows) || !rows.length) {
+      container.innerHTML = '<p class="muted-text">No payments waiting for verification.</p>';
+      return;
+    }
+
+    container.innerHTML = rows
+      .map(function (p) {
+        const submittedAt = p.submitted_at
+          ? new Date(p.submitted_at).toLocaleString()
+          : "—";
+        const screenshot = p.screenshot_data_url
+          ? '<a class="pending-ss" href="' + escapeHtml(p.screenshot_data_url) +
+            '" target="_blank" rel="noopener"><img src="' +
+            escapeHtml(p.screenshot_data_url) + '" alt="payment screenshot" /></a>'
+          : '<span class="muted-text">No screenshot</span>';
+        return (
+          '<div class="pending-row" data-order-id="' + escapeHtml(p.order_id) + '">' +
+            '<div class="pending-info">' +
+              '<p><strong>' + escapeHtml(p.team_name || ("Team #" + p.team_id)) + '</strong> · ' +
+                escapeHtml(p.owner_email || "—") + ' · ' +
+                escapeHtml(p.tournament_type || "—") + '</p>' +
+              '<p class="muted-text">Ref <code>' + escapeHtml(p.tr || "—") + '</code> · ' +
+                'UTR <code>' + escapeHtml(p.submitted_utr || "—") + '</code> · ' +
+                'INR ' + escapeHtml(p.amount || 0) + '</p>' +
+              '<p class="muted-text">Submitted ' + escapeHtml(submittedAt) + '</p>' +
+            '</div>' +
+            '<div class="pending-ss-wrap">' + screenshot + '</div>' +
+            '<div class="pending-actions">' +
+              '<button class="button button-primary small" data-action="verify-payment">Verify</button>' +
+              '<button class="button button-secondary small" data-action="reject-payment">Reject</button>' +
+            '</div>' +
+          '</div>'
+        );
+      })
+      .join("");
+
+    container.querySelectorAll('[data-action="verify-payment"]').forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const row = btn.closest(".pending-row");
+        const orderId = row && row.getAttribute("data-order-id");
+        if (!orderId) return;
+        if (!confirm("Verify payment for order " + orderId + "?")) return;
+        apiRequest("/payments/admin/verify", {
+          method: "POST",
+          body: JSON.stringify({ order_id: orderId }),
+        })
+          .then(function () {
+            showToast("Verified", "Team slotted into tournament.");
+            loadAdminDashboard();
+          })
+          .catch(function (err) { showToast("Verify failed", err.message); });
+      });
+    });
+
+    container.querySelectorAll('[data-action="reject-payment"]').forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const row = btn.closest(".pending-row");
+        const orderId = row && row.getAttribute("data-order-id");
+        if (!orderId) return;
+        const reason = prompt("Reject reason (optional):") || "";
+        apiRequest("/payments/admin/reject", {
+          method: "POST",
+          body: JSON.stringify({ order_id: orderId, reason: reason }),
+        })
+          .then(function () {
+            showToast("Rejected", "Payment marked rejected.");
+            loadAdminDashboard();
+          })
+          .catch(function (err) { showToast("Reject failed", err.message); });
+      });
+    });
+  }
+
+  function renderAdminPayments(payments) {
+    const container = document.getElementById('admin-payments-list');
+    if (!container) return;
+
+    if (!Array.isArray(payments) || !payments.length) {
+      container.innerHTML = '<p class="muted-text">No payments recorded yet.</p>';
+      return;
+    }
+
+    const totalCompleted = payments
+      .filter(function (p) { return String(p.status).toLowerCase() === 'completed'; })
+      .reduce(function (acc, p) { return acc + Number(p.amount || 0); }, 0);
+
+    container.innerHTML =
+      '<p class="muted-text">' + payments.length + ' transactions · INR ' +
+      escapeHtml(totalCompleted) + ' collected</p>' +
+      '<div class="payments-table-wrap">' +
+      '<table class="payments-table">' +
+      '<thead><tr>' +
+      '<th>Team</th>' +
+      '<th>Owner</th>' +
+      '<th>Amount</th>' +
+      '<th>Status</th>' +
+      '<th>UTR</th>' +
+      '<th>Created</th>' +
+      '<th></th>' +
+      '</tr></thead>' +
+      '<tbody>' +
+      payments
+        .map(function (p) {
+          const status = String(p.status || '').toLowerCase();
+          const badgeClass =
+            (status === 'completed' || status === 'verified') ? 'badge-success' :
+            (status === 'failed' || status === 'rejected' || status === 'revoked') ? 'badge-fail' :
+            'badge-muted';
+          const created = p.created_at
+            ? new Date(p.created_at).toLocaleString()
+            : '';
+          const canRevoke = status === 'verified' || status === 'completed';
+          const actions = canRevoke
+            ? '<button class="button button-secondary small" data-action="revoke-payment" data-order-id="' +
+              escapeHtml(p.order_id || '') + '">Revoke</button>'
+            : '';
+          return (
+            '<tr>' +
+            '<td>' + escapeHtml(p.team_name || ('Team #' + (p.team_id || '?'))) + '</td>' +
+            '<td>' + escapeHtml(p.owner_email || '—') + '</td>' +
+            '<td>INR ' + escapeHtml(p.amount || 0) + '</td>' +
+            '<td><span class="badge ' + badgeClass + '">' + escapeHtml(status) + '</span></td>' +
+            '<td class="mono">' + escapeHtml(p.submitted_utr || '—') + '</td>' +
+            '<td>' + escapeHtml(created) + '</td>' +
+            '<td>' + actions + '</td>' +
+            '</tr>'
+          );
+        })
+        .join('') +
+      '</tbody></table>' +
+      '</div>';
+
+    container.querySelectorAll('[data-action="revoke-payment"]').forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const orderId = btn.getAttribute("data-order-id");
+        if (!orderId) return;
+        const reason = prompt(
+          "Revoke this verified payment? The team will be removed from the tournament queue if it hasn't started yet. Reason (optional):"
+        );
+        if (reason === null) return; // user cancelled
+        apiRequest("/payments/admin/revoke", {
+          method: "POST",
+          body: JSON.stringify({ order_id: orderId, reason: reason || "" }),
+        })
+          .then(function (res) {
+            if (res && res.tournament_locked) {
+              showToast("Revoked (bracket locked)",
+                "Marked revoked, but tournament has started — team stays in bracket. Handle manually.");
+            } else {
+              showToast("Revoked", "Team removed from queue.");
+            }
+            loadAdminDashboard();
+          })
+          .catch(function (err) { showToast("Revoke failed", err.message); });
+      });
+    });
   }
 
   function renderAdminDashboard(stats, tournaments, unassignedTeams) {
@@ -966,36 +1428,10 @@
       tournamentsContainer.innerHTML = '<p class="muted-text">No tournaments yet.</p>';
     } else {
       tournamentsContainer.innerHTML = tournaments
-        .map(function(tournament) {
-          const statusClass = tournament.status === 'running' ? 'badge-live' : 
-                            tournament.status === 'completed' ? 'badge-success' : 'badge-muted';
-          
-          return (
-            '<div class="admin-tournament-card">' +
-            '<div class="card-header">' +
-            '<h5>' + escapeHtml(tournament.tournament_type.toUpperCase() + ' Tournament #' + tournament.id) + '</h5>' +
-            '<span class="badge ' + statusClass + '">' + escapeHtml(tournament.status) + '</span>' +
-            '</div>' +
-            '<p class="muted-text">' + tournament.total_teams + ' teams • ' + tournament.total_players + ' players</p>' +
-            '<div class="teams-grid">' +
-            (tournament.teams || []).map(function(team) {
-              return (
-                '<div class="admin-team-card">' +
-                '<h6>' + escapeHtml(team.name) + '</h6>' +
-                '<p class="muted-text">' + (team.players || []).length + ' players</p>' +
-                '<div class="players-list">' +
-                (team.players || []).map(function(player) {
-                  return '<span>' + escapeHtml(player.valorant_name + '#' + player.valorant_tag) + '</span>';
-                }).join('') +
-                '</div>' +
-                '</div>'
-              );
-            }).join('') +
-            '</div>' +
-            '</div>'
-          );
-        })
+        .map(function(tournament) { return renderAdminTournamentCard(tournament); })
         .join('');
+
+      wireAdminMatchControls();
     }
 
     // Render unassigned teams
@@ -1018,6 +1454,550 @@
           );
         })
         .join('');
+    }
+  }
+
+  function renderAdminTournamentCard(tournament) {
+    const statusClass =
+      tournament.status === 'running' ? 'badge-live' :
+      tournament.status === 'completed' ? 'badge-success' : 'badge-muted';
+
+    const championTeam = tournament.winner_team_id
+      ? (tournament.teams || []).find(function find(t) {
+          return String(t.id) === String(tournament.winner_team_id);
+        })
+      : null;
+    const championLine = championTeam
+      ? '<p class="champ-line">🏆 Champion: ' + escapeHtml(championTeam.name) + '</p>'
+      : (tournament.winner_team_id
+          ? '<p class="champ-line">🏆 Champion: Team #' + escapeHtml(tournament.winner_team_id) + '</p>'
+          : '');
+
+    // Match progress strip
+    const allMatches = tournament.matches || [];
+    const completedMatches = allMatches.filter(function (m) {
+      return String(m.match_status || m.status).toLowerCase() === 'completed';
+    }).length;
+    const liveMatches = allMatches.filter(function (m) {
+      return String(m.match_status || m.status).toLowerCase() === 'live';
+    }).length;
+
+    return (
+      '<details class="admin-tournament-card" open>' +
+      '<summary class="t-card-summary">' +
+        '<div class="t-card-headline">' +
+          '<span class="t-card-name">' + escapeHtml(tournament.tournament_type.toUpperCase() + ' #' + tournament.id) + '</span>' +
+          '<span class="badge ' + statusClass + '">' + escapeHtml(tournament.status) + '</span>' +
+        '</div>' +
+        '<div class="t-card-stats">' +
+          '<span>' + escapeHtml(tournament.total_teams) + '/8 teams</span>' +
+          '<span>' + escapeHtml(completedMatches) + '/' + escapeHtml(allMatches.length) + ' matches done</span>' +
+          (liveMatches ? '<span class="hot">' + liveMatches + ' LIVE</span>' : '') +
+          (championTeam ? '<span class="gold">🏆 ' + escapeHtml(championTeam.name) + '</span>' : '') +
+        '</div>' +
+      '</summary>' +
+      '<div class="t-card-body">' +
+        championLine +
+        '<div class="t-tab-bar">' +
+          '<button type="button" class="t-tab active" data-tab="matches">Matches</button>' +
+          '<button type="button" class="t-tab" data-tab="teams">Teams (' + (tournament.teams || []).length + ')</button>' +
+        '</div>' +
+        '<div class="t-tab-pane active" data-pane="matches">' +
+          renderAdminMatchesBlock(tournament) +
+        '</div>' +
+        '<div class="t-tab-pane" data-pane="teams">' +
+          renderAdminTeamsBlock(tournament) +
+        '</div>' +
+      '</div>' +
+      '</details>'
+    );
+  }
+
+  function renderAdminTeamsBlock(tournament) {
+    const teams = tournament.teams || [];
+    if (!teams.length) {
+      return '<p class="muted-text">No teams in this tournament yet.</p>';
+    }
+    return (
+      '<div class="teams-grid">' +
+      teams
+        .map(function (team) {
+          const players = team.players || [];
+          return (
+            '<div class="admin-team-card">' +
+            '<h6>' + escapeHtml(team.name) +
+            (String(team.id) === String(tournament.winner_team_id) ? ' 🏆' : '') +
+            '</h6>' +
+            '<p class="muted-text">' + players.length + ' players · ID #' + escapeHtml(team.id) + '</p>' +
+            (players.length
+              ? '<ol class="players-list">' +
+                players
+                  .map(function (player, idx) {
+                    const name = (player.valorant_name || '').trim();
+                    const tag  = (player.valorant_tag  || '').trim();
+                    const real = (player.full_name     || '').trim();
+                    return (
+                      '<li class="player-row">' +
+                        '<span class="player-num">' + (idx + 1) + '</span>' +
+                        '<span class="player-id">' +
+                          '<span class="player-name">' + escapeHtml(name || real || '—') + '</span>' +
+                          (tag ? '<span class="player-tag">#' + escapeHtml(tag) + '</span>' : '') +
+                        '</span>' +
+                        (real && real !== name
+                          ? '<span class="player-real">' + escapeHtml(real) + '</span>'
+                          : '') +
+                      '</li>'
+                    );
+                  })
+                  .join('') +
+                '</ol>'
+              : '<p class="muted-text">No players registered.</p>') +
+            '</div>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  function renderAdminMatchesBlock(tournament) {
+    const matches = tournament.matches || [];
+    if (!matches.length) {
+      return '<p class="muted-text">No matches scheduled yet. Bracket is created once 8 paid teams join.</p>';
+    }
+
+    const rounds = [
+      { key: 1, label: 'Quarterfinals' },
+      { key: 2, label: 'Semifinals' },
+      { key: 3, label: 'Final' },
+    ];
+
+    return (
+      '<div class="admin-matches">' +
+      '<h6>Match Controls</h6>' +
+      rounds
+        .map(function (round) {
+          const roundMatches = matches.filter(function (m) {
+            return Number(m.round || 1) === round.key;
+          });
+          if (!roundMatches.length) return '';
+          return (
+            '<section class="admin-round">' +
+            '<p class="round-title">' + escapeHtml(round.label) + '</p>' +
+            roundMatches.map(function (m) { return renderAdminMatchRow(m); }).join('') +
+            '</section>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  function renderAdminMatchRow(m) {
+    const t1 = m.team1_name || (m.team1_id ? 'Team #' + m.team1_id : 'TBD');
+    const t2 = m.team2_name || (m.team2_id ? 'Team #' + m.team2_id : 'TBD');
+    const status = String(m.match_status || m.status || 'scheduled').toLowerCase();
+    const isCompleted = status === 'completed';
+    const isLive = status === 'live';
+
+    // Format scheduled_time for datetime-local input (yyyy-MM-ddTHH:mm)
+    let scheduledValue = '';
+    if (m.scheduled_time) {
+      const d = new Date(m.scheduled_time);
+      if (!isNaN(d.getTime())) {
+        const pad = function (n) { return String(n).padStart(2, '0'); };
+        scheduledValue =
+          d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+          'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      }
+    }
+
+    const canSetWinner = m.team1_id && m.team2_id && !isCompleted;
+    const winnerName = m.winner_name || (m.winner_id ? 'Team #' + m.winner_id : '');
+
+    return (
+      '<div class="admin-match" data-match-id="' + m.id + '">' +
+      '<div class="match-row-head">' +
+      '<span class="m-id">Match #' + escapeHtml(m.id) + '</span>' +
+      '<span class="m-status badge ' +
+      (isCompleted ? 'badge-success' : isLive ? 'badge-live' : 'badge-muted') +
+      '">' + escapeHtml(status) + '</span>' +
+      '</div>' +
+      '<div class="match-row-teams">' +
+      '<strong>' + escapeHtml(t1) + '</strong>' +
+      '<span class="vs">vs</span>' +
+      '<strong>' + escapeHtml(t2) + '</strong>' +
+      '</div>' +
+      (winnerName ? '<p class="winner-line">Winner: ' + escapeHtml(winnerName) + '</p>' : '') +
+      '<div class="match-row-controls">' +
+      '<label>Schedule' +
+      '<input type="datetime-local" data-act="schedule-input" value="' + escapeHtml(scheduledValue) + '" />' +
+      '</label>' +
+      '<button type="button" class="button button-secondary small" data-act="schedule">Save Time</button>' +
+      (!isCompleted && !isLive && m.team1_id && m.team2_id
+        ? '<button type="button" class="button button-primary small" data-act="start">Start</button>'
+        : '') +
+      (canSetWinner
+        ? '<div class="winner-picker">' +
+          '<button type="button" class="button button-primary small" data-act="winner" data-winner-id="' + m.team1_id + '">Set ' + escapeHtml(t1) + ' as winner</button>' +
+          '<button type="button" class="button button-primary small" data-act="winner" data-winner-id="' + m.team2_id + '">Set ' + escapeHtml(t2) + ' as winner</button>' +
+          '</div>'
+        : '') +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  function wireAdminMatchControls() {
+    // Tab switching inside each tournament card
+    document.querySelectorAll('.admin-tournament-card').forEach(function (card) {
+      const tabs = card.querySelectorAll('.t-tab');
+      const panes = card.querySelectorAll('.t-tab-pane');
+      tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          const target = tab.getAttribute('data-tab');
+          tabs.forEach(function (t) { t.classList.toggle('active', t === tab); });
+          panes.forEach(function (p) {
+            p.classList.toggle('active', p.getAttribute('data-pane') === target);
+          });
+        });
+      });
+    });
+
+    document.querySelectorAll('.admin-match').forEach(function (row) {
+      const matchId = row.getAttribute('data-match-id');
+      const scheduleInput = row.querySelector('[data-act="schedule-input"]');
+
+      row.querySelectorAll('[data-act]').forEach(function (el) {
+        const act = el.getAttribute('data-act');
+        if (act === 'schedule-input') return; // input itself, no click handler
+
+        el.addEventListener('click', async function () {
+          try {
+            if (act === 'schedule') {
+              const val = scheduleInput && scheduleInput.value;
+              if (!val) {
+                showToast('Pick a time', 'Choose a date and time before saving.');
+                return;
+              }
+              await apiRequest('/admin/match/schedule', {
+                method: 'POST',
+                body: JSON.stringify({ match_id: Number(matchId), scheduled_time: val }),
+              });
+              showToast('Match scheduled', 'Time saved.');
+              loadAdminDashboard();
+            } else if (act === 'start') {
+              await apiRequest('/admin/match/start', {
+                method: 'POST',
+                body: JSON.stringify({ match_id: Number(matchId) }),
+              });
+              showToast('Match started', 'Status set to live.');
+              loadAdminDashboard();
+            } else if (act === 'winner') {
+              const winnerId = Number(el.getAttribute('data-winner-id'));
+              const res = await apiRequest('/admin/match/set-winner', {
+                method: 'POST',
+                body: JSON.stringify({ match_id: Number(matchId), winner_id: winnerId }),
+              });
+              if (res && res.tournament_completed) {
+                showToast('Tournament finished', 'Champion crowned. Updating home page.');
+                loadChampion();
+              } else {
+                showToast('Winner set', 'Advancing the bracket.');
+              }
+              loadAdminDashboard();
+            }
+          } catch (err) {
+            showToast('Action failed', err.message);
+          }
+        });
+      });
+    });
+  }
+
+  async function loadMySquads() {
+    if (!elements.mySquadsGrid) return;
+    if (!state.auth.isAuthenticated || !state.auth.username) {
+      elements.mySquadsGrid.innerHTML =
+        '<p class="my-squads-empty">Sign in to see your registered squads.</p>';
+      if (elements.mySquadsCounter) elements.mySquadsCounter.textContent = "";
+      return;
+    }
+
+    try {
+      elements.mySquadsGrid.innerHTML =
+        '<p class="my-squads-empty">Loading your squads…</p>';
+      const teams = await apiRequest("/teams/mine", {
+        method: "GET",
+        headers: {
+          "X-User-Username": state.auth.username,
+          "X-User-Id": state.auth.userId || "",
+        },
+      });
+
+      const list = Array.isArray(teams) ? teams : [];
+
+      // Fetch rosters in parallel
+      const rosters = await Promise.all(
+        list.map(function fetchRoster(team) {
+          return apiRequest("/players/" + team.id)
+            .then(function ok(rows) { return Array.isArray(rows) ? rows : []; })
+            .catch(function fail() { return []; });
+        })
+      );
+
+      renderMySquads(list, rosters);
+    } catch (err) {
+      elements.mySquadsGrid.innerHTML =
+        '<p class="my-squads-empty">Could not load your squads: ' +
+        escapeHtml(err.message) +
+        "</p>";
+    }
+  }
+
+  function renderMySquads(teams, rosters) {
+    if (!elements.mySquadsGrid) return;
+
+    if (elements.mySquadsCounter) {
+      elements.mySquadsCounter.textContent =
+        teams.length + " of " + MAX_TEAMS_PER_OWNER + " squad slots used.";
+    }
+
+    // Disable "new squad" button when at the cap
+    if (elements.mySquadsNew) {
+      const atCap = teams.length >= MAX_TEAMS_PER_OWNER;
+      elements.mySquadsNew.disabled = atCap;
+      elements.mySquadsNew.textContent = atCap
+        ? "Squad limit reached (" + MAX_TEAMS_PER_OWNER + "/" + MAX_TEAMS_PER_OWNER + ")"
+        : "+ Register New Squad";
+    }
+
+    if (!teams.length) {
+      elements.mySquadsGrid.innerHTML =
+        '<p class="my-squads-empty">No teams registered yet. Use Register to create your first squad.</p>';
+      return;
+    }
+
+    elements.mySquadsGrid.innerHTML = teams
+      .map(function mapTeam(team, idx) {
+        const roster = rosters[idx] || [];
+        const agent = team.agent_id ? state.agents[team.agent_id] : null;
+        const agentImg = agent && (agent.displayIconSmall || agent.displayIcon);
+        const agentName = agent ? agent.displayName : "No agent selected";
+        const isActive = state.team && String(state.team.id) === String(team.id);
+        const tournamentStatus = team.tournament_id
+          ? "In tournament #" + team.tournament_id
+          : "Not in tournament";
+
+        const rosterRows = roster.length
+          ? roster
+              .map(function mapPlayer(player, i) {
+                const dn =
+                  player.full_name || player.name || player.valorant_name || "Unnamed";
+                const tag = player.valorant_tag || player.tag || "";
+                const riot = [player.valorant_name, tag].filter(Boolean).join("#");
+                return (
+                  "<li><span>" +
+                  escapeHtml(i + 1 + ". " + dn) +
+                  "</span><span>" +
+                  escapeHtml(riot) +
+                  "</span></li>"
+                );
+              })
+              .join("")
+          : '<li class="empty">No players added yet.</li>';
+
+        const avatar = agentImg
+          ? '<img class="squad-agent-avatar" src="' + agentImg + '" alt="' + escapeHtml(agentName) + '"/>'
+          : '<div class="squad-agent-avatar" aria-hidden="true"></div>';
+
+        return (
+          '<article class="squad-card' +
+          (isActive ? " is-active" : "") +
+          '" data-team-id="' +
+          team.id +
+          '">' +
+          '<div class="squad-card-head">' +
+          avatar +
+          '<div><p class="name">' +
+          escapeHtml(team.name || "Unnamed Squad") +
+          '</p><p class="agent-name">' +
+          escapeHtml(agentName) +
+          "</p></div></div>" +
+          '<div class="squad-meta"><span>ID #' +
+          escapeHtml(team.id) +
+          "</span><span>" +
+          escapeHtml(tournamentStatus) +
+          "</span><span>" +
+          escapeHtml(roster.length + "/6 players") +
+          "</span></div>" +
+          '<ul class="squad-roster">' +
+          rosterRows +
+          "</ul>" +
+          '<div class="squad-actions">' +
+          '<button type="button" class="button button-secondary" data-squad-action="activate">' +
+          (isActive ? "Active Squad" : "Set Active") +
+          "</button>" +
+          '<button type="button" class="button button-primary" data-squad-action="open">' +
+          (team.tournament_id ? "Open Tournament" : "Add Players / Pay") +
+          "</button>" +
+          "</div>" +
+          "</article>"
+        );
+      })
+      .join("");
+
+    // Wire actions on each card
+    elements.mySquadsGrid
+      .querySelectorAll(".squad-card")
+      .forEach(function bindCard(card) {
+        const teamId = card.getAttribute("data-team-id");
+        const team = teams.find(function match(t) {
+          return String(t.id) === String(teamId);
+        });
+        const teamRoster = team
+          ? rosters[teams.indexOf(team)]
+          : [];
+
+        card.querySelectorAll("[data-squad-action]").forEach(function bindBtn(btn) {
+          btn.addEventListener("click", function onAction() {
+            const action = btn.getAttribute("data-squad-action");
+            if (!team) return;
+
+            // Set this team as the active one in state
+            state.team = team;
+            state.roster = teamRoster || [];
+            saveSession();
+            renderSession();
+
+            if (action === "open") {
+              if (team.tournament_id) {
+                setView("dashboard");
+                loadDashboard(team.id, state.selectedType);
+              } else {
+                setView("register");
+              }
+            } else {
+              // re-render to highlight the now-active card
+              renderMySquads(teams, rosters);
+              showToast("Active squad updated", (team.name || "Squad") + " is now active.");
+            }
+          });
+        });
+      });
+  }
+
+  const championCarousel = {
+    list: [],
+    index: 0,
+    timer: null,
+  };
+
+  function renderChampionSlide() {
+    const el = document.getElementById("champion-card");
+    const controls = document.getElementById("champion-controls");
+    const dots = document.getElementById("champion-dots");
+    if (!el) return;
+
+    if (!championCarousel.list.length) {
+      el.innerHTML =
+        '<p class="champion-placeholder">No champion crowned yet — the next finale decides who lifts the trophy.</p>';
+      if (controls) controls.hidden = true;
+      return;
+    }
+
+    const total = championCarousel.list.length;
+    const champ = championCarousel.list[championCarousel.index % total];
+
+    const agent = champ.team.agent_id ? state.agents[champ.team.agent_id] : null;
+    const agentImg = agent && (agent.displayIcon || agent.displayIconSmall);
+    const agentName = agent ? agent.displayName : "No agent";
+    const prize = champ.prize_pool ? "INR " + champ.prize_pool : "Prize TBD";
+    const tierLabel = (champ.tournament_type || "amateur").toUpperCase();
+    const completed = champ.completed_at
+      ? new Date(champ.completed_at).toLocaleDateString()
+      : "";
+
+    const players = champ.players || [];
+    const rosterRows = players.length
+      ? players
+          .map(function mapP(p, i) {
+            const dn = p.full_name || p.name || p.valorant_name || "Unnamed";
+            const tag = p.valorant_tag || p.tag || "";
+            const riot = [p.valorant_name, tag].filter(Boolean).join("#");
+            return (
+              "<li><span>" +
+              escapeHtml(i + 1 + ". " + dn) +
+              "</span><span>" +
+              escapeHtml(riot) +
+              "</span></li>"
+            );
+          })
+          .join("")
+      : '<li class="champion-no-players">Winning squad had no players registered.</li>';
+
+    el.innerHTML =
+      '<div class="champion-slide">' +
+      '<div class="champion-head">' +
+      (agentImg
+        ? '<img src="' + agentImg + '" alt="' + escapeHtml(agentName) + '"/>'
+        : '<div class="champion-no-portrait"></div>') +
+      '<div><p class="trophy">🏆 Tournament #' + escapeHtml(champ.tournament_id) + '</p>' +
+      '<h4 class="team-name">' + escapeHtml(champ.team.name || "Unknown") + '</h4>' +
+      '<p class="agent-name">' + escapeHtml(agentName) + '</p></div>' +
+      '</div>' +
+      '<div class="champion-meta">' +
+      '<span>' + escapeHtml(tierLabel) + ' tier</span>' +
+      '<span>' + escapeHtml(prize) + '</span>' +
+      (completed ? '<span>Crowned ' + escapeHtml(completed) + '</span>' : '') +
+      '</div>' +
+      '<p class="champion-roster-title">Winning Roster</p>' +
+      '<ul class="champion-players">' + rosterRows + '</ul>' +
+      '</div>';
+
+    if (controls && dots) {
+      controls.hidden = total <= 1;
+      dots.innerHTML = championCarousel.list
+        .map(function (_, i) {
+          return (
+            '<button type="button" class="dot' +
+            (i === championCarousel.index ? ' active' : '') +
+            '" data-idx="' + i + '" aria-label="Champion ' + (i + 1) + '"></button>'
+          );
+        })
+        .join("");
+      dots.querySelectorAll(".dot").forEach(function (d) {
+        d.addEventListener("click", function () {
+          championCarousel.index = Number(d.getAttribute("data-idx"));
+          renderChampionSlide();
+          restartChampionAutoRotate();
+        });
+      });
+    }
+  }
+
+  function restartChampionAutoRotate() {
+    if (championCarousel.timer) clearInterval(championCarousel.timer);
+    if (championCarousel.list.length <= 1) return;
+    championCarousel.timer = setInterval(function () {
+      championCarousel.index =
+        (championCarousel.index + 1) % championCarousel.list.length;
+      renderChampionSlide();
+    }, 6500);
+  }
+
+  async function loadChampion() {
+    const el = document.getElementById("champion-card");
+    if (!el) return;
+    try {
+      const payload = await apiRequest("/tournaments/champions?limit=10");
+      championCarousel.list = (payload && payload.champions) || [];
+      championCarousel.index = 0;
+      renderChampionSlide();
+      restartChampionAutoRotate();
+    } catch (err) {
+      el.innerHTML =
+        '<p class="champion-placeholder">Could not load champion data.</p>';
     }
   }
 
@@ -1044,6 +2024,16 @@
       });
 
       renderAgentPicker(list);
+
+      // If the My Squads view was already rendered without agent data, re-render
+      // so squad cards now display the correct agent portrait + name.
+      if (state.auth.isAuthenticated && elements.mySquadsGrid &&
+          elements.mySquadsGrid.querySelector(".squad-card")) {
+        loadMySquads();
+      }
+
+      // Once agents are indexed, render the champion card with the agent portrait
+      loadChampion();
     } catch (err) {
       elements.agentPicker.innerHTML =
         '<p class="agent-picker-loading">Could not load agents. Check your connection and refresh.</p>';
@@ -1097,6 +2087,18 @@
   bindEvents();
   initEmptyDashboard();
   loadAgents();
+  loadChampion();
+
+  // On hard reload, if we have a session but no team (e.g. localStorage cleared
+  // partially or stored on another device), try to fetch the team from the backend.
+  if (state.auth.isAuthenticated && state.auth.username && !state.team) {
+    restoreUserTeam().then(function afterRestore() {
+      if (state.team) {
+        saveSession();
+        renderSession();
+      }
+    });
+  }
 
   if (state.team && isAdmin()) {
     pushActivity("Session restored", "Continuing from saved team ID #" + state.team.id + ".");

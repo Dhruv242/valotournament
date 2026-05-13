@@ -1,0 +1,40 @@
+# Build artifacts & VCS
+.git
+.gitignore
+.dockerignore
+**/.DS_Store
+
+# Dependencies — they're rebuilt inside the image
+node_modules
+npm-debug.log
+yarn-error.log
+pnpm-lock.yaml
+yarn.lock
+
+# Secrets / local config — never bake these into images
+.env
+.env.*
+*.pem
+*.key
+
+# Editor and IDE
+.vscode
+.idea
+*.swp
+
+# Docs / tests / backups (we don't need them at runtime)
+*.md
+README*
+test
+tests
+__tests__
+coverage
+.nyc_output
+*.backup*
+backup_*
+
+# Build / docker / k8s artifacts (kept in repo but irrelevant inside the image)
+Dockerfile
+docker-compose*.yml
+*.yaml
+*.yml

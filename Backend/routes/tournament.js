@@ -3,7 +3,110 @@ const router = express.Router();
 const jwt = require("jsonwebtoken");
 const pool = require("../db");
 
-const SECRET = process.env.JWT_SECRET || "supersecret";
+const SECRET = process.env.JWT_SECRET;
+if (!SECRET && process.env.NODE_ENV === "production") {
+  throw new Error("JWT_SECRET required in production");
+}
+
+// Public: list of recent champions (for home carousel)
+router.get("/champions", async (req, res) => {
+  try {
+    await pool.query("ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS winner_team_id INTEGER");
+    await pool.query("ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP");
+
+    const limit = Math.min(parseInt(req.query.limit || "10", 10) || 10, 25);
+
+    const rows = await pool.query(
+      `SELECT t.id   AS tournament_id,
+              t.tournament_type,
+              t.prize_pool,
+              t.completed_at,
+              w.id   AS winner_id,
+              w.name AS winner_name,
+              w.agent_id AS winner_agent_id
+       FROM tournaments t
+       JOIN teams w ON w.id = t.winner_team_id
+       WHERE t.status = 'completed' AND t.winner_team_id IS NOT NULL
+       ORDER BY t.completed_at DESC NULLS LAST, t.id DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    const champions = await Promise.all(
+      rows.rows.map(async function expand(row) {
+        const players = await pool.query(
+          `SELECT * FROM players WHERE team_id = $1 ORDER BY id ASC`,
+          [row.winner_id]
+        );
+        return {
+          tournament_id: row.tournament_id,
+          tournament_type: row.tournament_type,
+          prize_pool: row.prize_pool,
+          completed_at: row.completed_at,
+          team: {
+            id: row.winner_id,
+            name: row.winner_name,
+            agent_id: row.winner_agent_id,
+          },
+          players: players.rows,
+        };
+      })
+    );
+
+    res.json({ champions: champions });
+  } catch (err) {
+    console.error("Champions list error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Public: most recently completed tournament's champion (for home page)
+router.get("/champion", async (req, res) => {
+  try {
+    await pool.query("ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS winner_team_id INTEGER");
+    await pool.query("ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP");
+
+    const champ = await pool.query(
+      `SELECT t.*,
+              w.id   AS winner_id,
+              w.name AS winner_name,
+              w.agent_id AS winner_agent_id
+       FROM tournaments t
+       LEFT JOIN teams w ON w.id = t.winner_team_id
+       WHERE t.status = 'completed' AND t.winner_team_id IS NOT NULL
+       ORDER BY t.completed_at DESC NULLS LAST, t.id DESC
+       LIMIT 1`
+    );
+
+    if (!champ.rows.length) {
+      return res.json({ champion: null });
+    }
+
+    const row = champ.rows[0];
+    const players = await pool.query(
+      `SELECT * FROM players WHERE team_id = $1 ORDER BY id ASC`,
+      [row.winner_id]
+    );
+
+    res.json({
+      champion: {
+        tournament_id: row.id,
+        tournament_type: row.tournament_type,
+        prize_pool: row.prize_pool,
+        completed_at: row.completed_at,
+        team: {
+          id: row.winner_id,
+          name: row.winner_name,
+          agent_id: row.winner_agent_id,
+        },
+        players: players.rows,
+      },
+    });
+  } catch (err) {
+    console.error("Champion fetch error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Get tournament details by team ID (PLAYER AUTHORIZATION)
 router.get("/:team_id", async (req, res) => {
@@ -17,7 +120,7 @@ router.get("/:team_id", async (req, res) => {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, SECRET);
+      decoded = jwt.verify(token, SECRET || "dev-only-do-not-use");
     } catch (err) {
       return res.status(401).json({ error: "Invalid token" });
     }
@@ -35,7 +138,7 @@ router.get("/:team_id", async (req, res) => {
     const team = teamResult.rows[0];
 
     // AUTHORIZATION: Players can only see their own teams
-    if (decoded.role !== 'admin' && decoded.email !== team.owner_email) {
+    if (decoded.role !== 'admin' && decoded.username !== team.owner_email) {
       return res.status(403).json({ 
         error: "Access denied. You can only view your own team's tournament." 
       });
@@ -112,7 +215,7 @@ router.get("/lookup/:tournament_type", async (req, res) => {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, SECRET);
+      decoded = jwt.verify(token, SECRET || "dev-only-do-not-use");
     } catch (err) {
       return res.status(401).json({ error: "Invalid token" });
     }
@@ -134,7 +237,7 @@ router.get("/lookup/:tournament_type", async (req, res) => {
     const team = teamResult.rows[0];
 
     // AUTHORIZATION: Players can only lookup their own teams
-    if (decoded.role !== 'admin' && decoded.email !== team.owner_email) {
+    if (decoded.role !== 'admin' && decoded.username !== team.owner_email) {
       return res.status(403).json({ 
         error: "Access denied. You can only view your own team's tournament." 
       });
